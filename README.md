@@ -30,29 +30,18 @@ This pipeline replaces manual job searching. Instead of checking Indeed, LinkedI
 
 ```mermaid
 graph LR
-    subgraph Scrapers
-        A[Indeed] --> D[(SQLite DB)]
-        B[LinkedIn] --> D
-        C[StepStone] --> D
-        E[Arbeitsagentur] --> D
-    end
-
-    subgraph Scoring
-        D --> F["Keyword Scorer\n70+ categories"]
-        F --> G["LLM Scorer\n5 dimensions"]
-    end
-
-    subgraph Filtering
-        G --> H["Title Filter\nseniority/contract"]
-        H --> I["Relevance Gate\n14 clusters"]
-    end
-
-    subgraph Output
-        I --> J["Career Discovery\nATS detection"]
-        J --> K["CV + Cover Letter\n4 variants"]
-        K --> L[Telegram Alerts]
-        I --> M[Web Dashboard]
-    end
+    A[Indeed] --> D[(SQLite DB)]
+    B[LinkedIn] --> D
+    C[StepStone] --> D
+    E[Arbeitsagentur] --> D
+    D --> F[Keyword Scorer]
+    F --> G[LLM Scorer]
+    G --> H[Title Filter]
+    H --> I[Relevance Gate]
+    I --> J[Career Discovery]
+    J --> K[CV + Cover Letter]
+    K --> L[Telegram Alerts]
+    I --> M[Web Dashboard]
 ```
 
 ## Features
