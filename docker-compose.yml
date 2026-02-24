@@ -1,0 +1,31 @@
+services:
+  # Main pipeline dashboard
+  dashboard:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  # JobSpy scraper (runs on demand or via cron)
+  jobsearch:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - PROXY_URL=${PROXY_URL:-}
+    command: >
+      bash -c "
+        pip install -q jobspy pandas openpyxl pyyaml 2>/dev/null &&
+        python /app/run_jobspy.py
+      "
+    restart: "no"
+    mem_limit: 1g
+    profiles:
+      - scraper

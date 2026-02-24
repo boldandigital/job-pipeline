@@ -1,0 +1,36 @@
+# Scoring Configuration
+# Each weight determines how much a keyword category contributes to the job score.
+# Positive weights boost relevant jobs, negative weights penalize poor fits.
+
+scoring:
+  threshold: 20  # Minimum score to be considered
+
+  weights:
+    # Location preferences
+    fully_remote: 180
+    remote_first_culture: 160
+    hybrid_friendly: 120
+    preferred_city: 120
+
+    # Work-life balance
+    four_day_week: 120
+    async_culture: 120
+    flexible_hours: 70
+    results_oriented: 100
+
+    # Compensation
+    salary_above_target: 70
+    equity_options: 20
+
+    # Core skills match
+    ai_ml_roles: 65
+    automation_roles: 55
+    data_analytics: 50
+    business_analysis: 45
+
+    # Negative signals
+    office_required: -400
+    relocation_required: -700
+    wrong_seniority: -200
+    wrong_industry: -400
+    spam_gig: -900

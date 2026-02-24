@@ -1,0 +1,42 @@
+# Database
+*.db
+*.db-wal
+*.db-shm
+
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Data (generated at runtime)
+data/
+batches/
+screenshots/
+applications/
+
+# Media
+*.png
+*.pdf
+*.jpg
+
+# Logs
+logs/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

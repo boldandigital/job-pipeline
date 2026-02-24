@@ -1,0 +1,513 @@
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
+# ║                    JOB SEARCH PIPELINE — CONFIGURATION                       ║
+# ╠═══════════════════════════════════════════════════════════════════════════════╣
+# ║  Customize search queries, scoring weights, and keywords to match           ║
+# ║  your profile. The pipeline uses this config for:                            ║
+# ║    1. JobSpy Docker searches (Indeed, LinkedIn)                              ║
+# ║    2. Keyword-based scoring                                                  ║
+# ║    3. StepStone browser scraper query list                                   ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+# ============================================================
+# SEARCH CONFIGURATION
+# ============================================================
+search:
+  sites:
+    - "indeed"
+    - "linkedin"
+    # - "glassdoor"    # Often blocked, enable if it works for you
+    # - "google"       # Requires browser scraper, not JobSpy
+
+  locations:
+    - "Remote, Germany"
+    - "Germany"
+    - "Berlin, Germany"       # Change to your city
+
+  country_indeed: "Germany"
+
+  results_wanted: 50          # Per query per location
+  hours_old: 336              # 14 days
+  job_type: "fulltime"
+  distance: 50                # km radius for location searches
+  linkedin_fetch_description: true
+
+# ============================================================
+# PROXY (recommended for Indeed to avoid rate limits)
+# ============================================================
+proxy:
+  enabled: true
+  url: "http://user:pass@proxy-host:12321"    # Replace with your proxy
+
+# ============================================================
+# THROTTLING
+# ============================================================
+throttling:
+  enabled: true
+  default_delay: 1.5
+  site_delays:
+    indeed: 1.0
+  jitter: 0.3
+  rate_limit_cooldown: 30.0
+
+# ============================================================
+# PARALLEL WORKERS
+# ============================================================
+parallel:
+  max_workers: 4
+
+# ============================================================
+# SEARCH QUERIES — 15 CATEGORIES, ~160 QUERIES
+# ============================================================
+# Customize these for YOUR profile. Each category targets a
+# different role cluster. More queries = wider net.
+queries:
+
+  # AI & LLM Roles — highest demand, remote-friendly
+  ai_roles:
+    - "AI Trainer"
+    - "AI Trainer German"
+    - "AI Content Evaluator"
+    - "AI Evaluation Specialist"
+    - "AI Writing Evaluator"
+    - "AI Quality Analyst"
+    - "Prompt Engineer"
+    - "LLM Trainer"
+    - "AI Operations"
+    - "AI Operations Specialist"
+    - "AI Product Analyst"
+    - "GenAI Specialist"
+    - "Conversational AI"
+    - "Conversation Designer"
+    - "AI Implementation Specialist"
+    - "AI Adoption Manager"
+    - "AI Project Manager"
+    - "Data Annotation Specialist"
+    - "AI Content Specialist"
+    - "Machine Learning Operations"
+
+  # Agentic AI / AI Governance
+  agentic_ai_governance:
+    - "AI Agent Specialist"
+    - "Agentic AI"
+    - "AI Governance"
+    - "AI Compliance Analyst"
+    - "AI Ethics Officer"
+    - "AI Risk Analyst"
+    - "Responsible AI"
+    - "AI Policy Analyst"
+    - "AI Automation Business Specialist"
+    - "Applied AI Analyst"
+
+  # Cutting-Edge AI Tools & GenAI
+  cutting_edge_ai:
+    - "AI Solutions Specialist"
+    - "AI Strategist"
+    - "GenAI Engineer"
+    - "Generative AI Specialist"
+    - "AI Integration Specialist"
+    - "AI Workflow Specialist"
+    - "AI Tools Specialist"
+    - "LLM Specialist"
+    - "AI Platform Specialist"
+    - "RAG Engineer"
+    - "AI Consultant"
+    - "KI Spezialist"
+
+  # RevOps & GTM Operations — remote-friendly, CRM/automation skills
+  revops_gtm:
+    - "Revenue Operations"
+    - "RevOps Analyst"
+    - "RevOps Specialist"
+    - "RevOps Manager"
+    - "GTM Operations"
+    - "Sales Operations Analyst"
+    - "Sales Operations Specialist"
+    - "Marketing Operations"
+    - "Marketing Operations Analyst"
+    - "Revenue Enablement"
+    - "Deal Desk Analyst"
+    - "CRM Analyst"
+    - "CRM Administrator"
+    - "HubSpot Specialist"
+    - "Commercial Operations"
+
+  # Automation / Low-Code
+  automation:
+    - "Automation Specialist"
+    - "Automation Analyst"
+    - "AI Automation Specialist"
+    - "RPA Analyst"
+    - "RPA Specialist"
+    - "Process Automation"
+    - "Workflow Automation"
+    - "Low-Code Specialist"
+    - "No-Code Specialist"
+    - "Integration Specialist"
+    - "Automation Developer"
+    - "Business Process Automation"
+
+  # Business Analyst / Process
+  business_analyst:
+    - "Business Analyst"
+    - "IT Business Analyst"
+    - "Business Analyst Remote"
+    - "Process Analyst"
+    - "Business Process Analyst"
+    - "Requirements Engineer"
+    - "Product Analyst"
+    - "Digital Transformation Analyst"
+    - "Operations Analyst"
+    - "Business Intelligence Analyst"
+    - "Reporting Analyst"
+    - "Data Analyst"
+
+  # FinTech / RegTech / Compliance
+  fintech_regtech:
+    - "KYC Analyst"
+    - "AML Analyst"
+    - "Compliance Analyst"
+    - "RegTech Analyst"
+    - "Fraud Analyst"
+    - "Risk Analyst"
+    - "Transaction Monitoring"
+    - "Crypto Compliance"
+    - "Digital Assets Analyst"
+    - "Legal Operations"
+    - "Data Governance"
+    - "Data Quality Analyst"
+
+  # Implementation & Onboarding
+  implementation:
+    - "Implementation Specialist"
+    - "Implementation Consultant"
+    - "Customer Onboarding Specialist"
+    - "Onboarding Manager"
+    - "Solution Specialist"
+    - "Software Implementation"
+    - "Product Implementation"
+    - "Configuration Specialist"
+    - "Deployment Specialist"
+    - "Integration Consultant"
+
+  # Customer Success (Tech)
+  customer_success:
+    - "Customer Success Manager"
+    - "Customer Success Specialist"
+    - "Technical Account Manager"
+    - "Client Success Manager"
+    - "Customer Experience Manager"
+    - "Partner Success Manager"
+    - "Customer Enablement"
+    - "Customer Operations"
+    - "Renewal Manager"
+    - "Customer Success Analyst"
+
+  # Technical Writing & Docs
+  technical_writing:
+    - "Technical Writer"
+    - "Technical Writer Remote"
+    - "Technischer Redakteur"
+    - "Documentation Specialist"
+    - "Knowledge Manager"
+    - "UX Writer"
+    - "Information Architect"
+    - "Product Documentation"
+
+  # Enablement / Training
+  enablement:
+    - "Enablement Specialist"
+    - "Sales Enablement"
+    - "Product Trainer"
+    - "Technical Trainer"
+    - "Learning Development Specialist"
+    - "Training Coordinator"
+
+  # German titles (important for DACH market)
+  german_titles:
+    - "Referent Digitalisierung"
+    - "Referent IT"
+    - "Referent KI"
+    - "Referent Prozessmanagement"
+    - "Digitalisierungsmanager"
+    - "Prozessmanager"
+    - "IT Koordinator"
+    - "Inhouse Consultant"
+    - "Anforderungsmanager"
+    - "Digital Transformation Manager"
+    - "IT Projektmanager"
+    - "Wirtschaftsinformatiker"
+    - "IT Berater"
+    - "Datenanalyst"
+
+  # SME/Mittelstand AI adoption (German market gap)
+  sme_ai_adoption:
+    - "KI Berater"
+    - "KI Koordinator"
+    - "KI Projektmanager"
+    - "Automatisierung Berater"
+    - "Prozessautomatisierung"
+    - "Digitalisierung Mittelstand"
+    - "Digital Officer"
+    - "Intelligent Automation"
+
+  # QA / Testing / Product
+  qa_product:
+    - "QA Analyst"
+    - "Quality Analyst"
+    - "Test Analyst"
+    - "System Analyst"
+    - "Product Owner"
+    - "Product Manager"
+    - "Scrum Master"
+    - "Agile Coach"
+
+# ============================================================
+# SCORING WEIGHTS
+# ============================================================
+# Positive = boost, negative = penalize. Adjust to your priorities.
+scoring:
+  threshold: 20
+
+  weights:
+    # Location (highest priority)
+    fully_remote: 180
+    remote_first_culture: 160
+    work_from_anywhere: 120
+    remote_europe: 100
+    remote_general: 80
+    preferred_city: 120
+
+    # Work-life balance
+    four_day_week: 120
+    async_culture: 120
+    flexible_hours: 70
+    autonomy_culture: 90
+    results_only: 100
+    unlimited_pto: 40
+
+    # Compensation
+    salary_above_target: 70
+    equity_options: 20
+
+    # Core skills
+    ai_llm_operations: 65
+    genai_roles: 60
+    ai_implementation: 55
+    ai_governance_ethics: 55
+    agentic_ai: 50
+    prompt_engineering: 50
+    automation_specialist: 55
+    workflow_automation: 50
+    rpa_roles: 45
+    revops_gtm: 45
+    business_analysis: 40
+
+    # Level fit
+    entry_mid_level: 40
+    multilingual_bonus: 25
+    known_good_companies: 50
+
+    # Negative signals
+    office_required: -400
+    on_site: -300
+    relocation_required: -700
+    gig_platforms: -900
+    scam_mlm: -800
+    recruiters: -200
+    pure_coding: -120
+    pure_sales: -400
+    pure_hr: -200
+    too_senior: -80
+    too_junior: -150
+    high_pressure: -300
+    travel_required: -400
+
+  # ============================================================
+  # KEYWORDS — mapped to scoring weights above
+  # ============================================================
+  keywords:
+
+    fully_remote:
+      - "100% remote"
+      - "fully remote"
+      - "full remote"
+      - "complete remote"
+      - "permanent remote"
+      - "remote only"
+      - "all-remote"
+      - "komplett remote"
+
+    remote_first_culture:
+      - "remote-first"
+      - "remote first"
+      - "distributed team"
+      - "distributed company"
+      - "work from anywhere"
+      - "async-first"
+
+    work_from_anywhere:
+      - "work from anywhere"
+      - "work from home"
+      - "wfh"
+      - "von zuhause"
+
+    remote_europe:
+      - "remote europe"
+      - "remote eu"
+      - "remote emea"
+      - "remote dach"
+      - "european timezone"
+
+    remote_general:
+      - "remote"
+      - "home office"
+      - "homeoffice"
+      - "telearbeit"
+      - "mobiles arbeiten"
+
+    preferred_city:
+      - "berlin"           # Change to your city
+      - "germany"
+
+    four_day_week:
+      - "4-day week"
+      - "4 day week"
+      - "four day week"
+      - "4-tage-woche"
+      - "32 hours"
+
+    async_culture:
+      - "async"
+      - "asynchronous"
+      - "documentation-first"
+      - "no meetings"
+
+    flexible_hours:
+      - "flexible hours"
+      - "flexible working"
+      - "flextime"
+      - "gleitzeit"
+      - "work-life balance"
+
+    autonomy_culture:
+      - "autonomy"
+      - "self-directed"
+      - "flat hierarchy"
+      - "eigenverantwortung"
+
+    results_only:
+      - "results-oriented"
+      - "results only"
+      - "output-focused"
+      - "outcome-based"
+
+    ai_llm_operations:
+      - "ai operations"
+      - "ai ops"
+      - "llm ops"
+      - "mlops"
+      - "ai trainer"
+      - "ai evaluator"
+      - "ai quality"
+
+    genai_roles:
+      - "generative ai"
+      - "genai"
+      - "large language model"
+      - "llm"
+      - "ai content"
+
+    ai_implementation:
+      - "ai implementation"
+      - "ai adoption"
+      - "ai integration"
+      - "ai transformation"
+
+    ai_governance_ethics:
+      - "ai governance"
+      - "ai ethics"
+      - "ai compliance"
+      - "responsible ai"
+      - "ai safety"
+
+    agentic_ai:
+      - "agentic ai"
+      - "ai agent"
+      - "autonomous agent"
+      - "langchain"
+      - "crewai"
+
+    prompt_engineering:
+      - "prompt engineer"
+      - "prompt engineering"
+      - "prompt design"
+
+    automation_specialist:
+      - "automation specialist"
+      - "automation manager"
+      - "ai automation"
+
+    workflow_automation:
+      - "workflow automation"
+      - "process automation"
+      - "business process automation"
+
+    rpa_roles:
+      - "rpa"
+      - "robotic process"
+      - "uipath"
+      - "blue prism"
+
+    revops_gtm:
+      - "revenue operations"
+      - "revops"
+      - "gtm operations"
+      - "sales operations"
+
+    business_analysis:
+      - "business analyst"
+      - "process analyst"
+      - "requirements engineer"
+      - "product analyst"
+
+    office_required:
+      - "office required"
+      - "on-site required"
+      - "no remote"
+      - "vor ort pflicht"
+
+    gig_platforms:
+      - "fiverr"
+      - "upwork"
+      - "freelancer.com"
+      - "commission only"
+
+    scam_mlm:
+      - "network marketing"
+      - "mlm"
+      - "pyramid"
+      - "unlimited earnings"
+
+    pure_coding:
+      - "senior developer"
+      - "senior engineer"
+      - "staff engineer"
+      - "principal engineer"
+
+    pure_sales:
+      - "cold calling"
+      - "door to door"
+      - "quota"
+      - "commission based"
+
+    too_senior:
+      - "10+ years"
+      - "director level"
+      - "vp of"
+      - "head of"
+
+    high_pressure:
+      - "fast-paced environment"
+      - "high pressure"
+      - "crunch time"
+      - "overtime expected"
