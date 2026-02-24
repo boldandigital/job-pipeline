@@ -38,18 +38,18 @@ graph LR
     end
 
     subgraph Scoring
-        D --> F[Keyword Scorer<br/>70+ categories]
-        F --> G[LLM Scorer<br/>5 dimensions]
+        D --> F["Keyword Scorer\n70+ categories"]
+        F --> G["LLM Scorer\n5 dimensions"]
     end
 
     subgraph Filtering
-        G --> H[Title Filter<br/>seniority/contract]
-        H --> I[Relevance Gate<br/>14 competency clusters]
+        G --> H["Title Filter\nseniority/contract"]
+        H --> I["Relevance Gate\n14 clusters"]
     end
 
     subgraph Output
-        I --> J[Career Discovery<br/>ATS detection]
-        J --> K[CV + Cover Letter<br/>4 variants]
+        I --> J["Career Discovery\nATS detection"]
+        J --> K["CV + Cover Letter\n4 variants"]
         K --> L[Telegram Alerts]
         I --> M[Web Dashboard]
     end
