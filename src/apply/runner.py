@@ -31,6 +31,8 @@ import os
 import sqlite3
 import sys
 import time
+import urllib.request
+import urllib.error
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -137,6 +139,131 @@ def append_audit(logs_dir: str, entry: Dict[str, Any]) -> None:
         entry = {**entry, "ts": _now_iso()}
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# Discord notifications (ADOPT-12d)
+# ---------------------------------------------------------------------------
+#
+# Mirrors the lars-daily-run.sh discord_send() logic but as Python functions.
+# Reads Discord config from environment variables (same .env pattern).
+
+
+def _discord_config() -> Dict[str, Optional[str]]:
+    """Return Discord config from env (bot mode preferred, webhook fallback)."""
+    bot_token = os.getenv("DISCORD_BOT_TOKEN")
+    channel_id = os.getenv("DISCORD_CHANNEL_ID")
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+    username = os.getenv("DISCORD_USERNAME")
+    if bot_token and channel_id:
+        return {
+            "mode": "bot",
+            "token": bot_token,
+            "channel": channel_id,
+            "username": username,
+        }
+    if webhook_url:
+        return {"mode": "webhook", "webhook_url": webhook_url, "username": username}
+    return {"mode": "none", "webhook_url": None, "token": None, "channel": None, "username": None}
+
+
+def _discord_post(url: str, data: bytes, headers: Dict[str, str]) -> int:
+    """POST to Discord, return HTTP status."""
+    req = urllib.request.Request(url, data=data, method="POST")
+    for k, v in headers.items():
+        req.add_header(k, v)
+    # Discord/Cloudflare require a proper User-Agent
+    if "User-Agent" not in req.headers:
+        req.add_header("User-Agent", "DiscordBot (job-pipeline, 1.0)")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace") if e.fp else ""
+        log.warning("Discord HTTP %d: %s", e.code, body[:200])
+        raise
+
+
+def discord_send(msg: str, attachment: Optional[str] = None) -> bool:
+    """
+    Send a message to Discord. Returns True on success, False if disabled/failed.
+
+    Bot mode: multipart if attachment given, else JSON.
+    Webhook mode: JSON only (no file upload support in this shim).
+    """
+    cfg = _discord_config()
+    if cfg["mode"] == "none":
+        log.debug("Discord not configured — skipping notification")
+        return False
+
+    if cfg["mode"] == "bot":
+        token = cfg["token"]
+        channel = cfg["channel"]
+        username = cfg.get("username")
+        base = f"https://discord.com/api/v10/channels/{channel}/messages"
+        headers = {"Authorization": f"Bot {token}"}
+
+        if attachment:
+            import os as _os
+            boundary = "----jpboundary" + _os.urandom(8).hex()
+            body_parts = []
+            payload = {"content": msg}
+            if username:
+                payload["username"] = username
+            body_parts.append(f"--{boundary}\r\n".encode())
+            body_parts.append(b'Content-Disposition: form-data; name="payload_json"\r\n\r\n')
+            body_parts.append(json.dumps(payload).encode())
+            body_parts.append(b"\r\n")
+            body_parts.append(f'--{boundary}\r\n'.encode())
+            body_parts.append(f'Content-Disposition: form-data; name="files[0]"; filename="{_os.path.basename(attachment)}"\r\n'.encode())
+            body_parts.append(b"Content-Type: application/octet-stream\r\n\r\n")
+            with open(attachment, "rb") as fh:
+                body_parts.append(fh.read())
+            body_parts.append(b"\r\n")
+            body_parts.append(f"--{boundary}--\r\n".encode())
+            data = b"".join(body_parts)
+            status = _discord_post(base, data, {**headers, "Content-Type": f"multipart/form-data; boundary={boundary}"})
+        else:
+            payload = {"content": msg}
+            if username:
+                payload["username"] = username
+            status = _discord_post(base, json.dumps(payload).encode(), {**headers, "Content-Type": "application/json"})
+        log.info("Discord bot status: %d", status)
+        return status == 200 or status == 201 or status == 204
+
+    # webhook mode
+    webhook = cfg["webhook_url"]
+    if not webhook:
+        return False
+    payload = {"content": msg}
+    if cfg.get("username"):
+        payload["username"] = cfg["username"]
+    status = _discord_post(webhook, json.dumps(payload).encode(), {"Content-Type": "application/json"})
+    log.info("Discord webhook status: %d", status)
+    return status == 200 or status == 201 or status == 204
+
+
+def _discord_notify_apply_result(job: Mapping[str, Any], result: base_mod.ApplyResult, screenshot: str) -> None:
+    """Send per-apply Discord notification."""
+    if base_mod.is_generic_fallback_result(result):
+        msg = f"⚠️ Needs human: {job.get('title')} @ {job.get('company')} via {result.ats_type or 'generic'} — {result.error or 'generic fallback paused for review'}"
+    elif result.success:
+        msg = f"✅ Applied: {job.get('title')} @ {job.get('company')} via {result.ats_type}"
+    else:
+        msg = f"❌ Failed: {job.get('title')} @ {job.get('company')} — {result.error}"
+    discord_send(msg)
+
+
+def _discord_notify_summary(summary: Dict[str, Any]) -> None:
+    """Send end-of-run summary to Discord."""
+    applied = summary.get("applied", 0)
+    needs_human = summary.get("needs_human", 0)
+    failed = summary.get("failed", 0)
+    total = applied + needs_human + failed
+    if total == 0:
+        return
+    msg = f"📊 Apply run complete: {total} job(s) — {applied} ✅, {needs_human} ⚠️, {failed} ❌"
+    discord_send(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +454,7 @@ async def run_apply_pipeline(
 
         result = await _apply_one(job, profile, cv_path, cover_path, driver)
 
-        # Apply side effects: status + audit.
+        # Apply side effects: status + audit + Discord.
         if base_mod.is_generic_fallback_result(result):
             update_job_status(conn, job["id"], STATUS_NEEDS_HUMAN)
             append_audit(logs_dir, {
@@ -340,6 +467,7 @@ async def run_apply_pipeline(
                 "screenshot": result.screenshot_path,
                 "fields_filled": result.fields_filled,
             })
+            _discord_notify_apply_result(job, result, result.screenshot_path)
             summary["needs_human"] += 1
             summary["jobs"].append({"id": job["id"], "result": "needs_human"})
         elif result.success:
@@ -355,6 +483,7 @@ async def run_apply_pipeline(
                 "screenshot": result.screenshot_path,
                 "fields_filled": result.fields_filled,
             })
+            _discord_notify_apply_result(job, result, result.screenshot_path)
             summary["applied"] += 1
             summary["jobs"].append({"id": job["id"], "result": "submitted"})
         else:
@@ -369,10 +498,12 @@ async def run_apply_pipeline(
                 "screenshot": result.screenshot_path,
                 "fields_filled": result.fields_filled,
             })
+            _discord_notify_apply_result(job, result, result.screenshot_path)
             summary["failed"] += 1
             summary["jobs"].append({"id": job["id"], "result": "failed"})
 
     conn.close()
+    _discord_notify_summary(summary)
     return summary
 
 
