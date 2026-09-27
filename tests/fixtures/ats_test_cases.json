@@ -1,0 +1,26 @@
+{
+  "_about": "Known ATS deployments (verified via vendor customer pages / job posting URLs as of 2024-2025). Used by test_career_discovery.py to assert detect_ats() accuracy. URLs use the actual ATS board paths because that's what scraped job postings link to in practice.",
+  "_expected_accuracy": ">= 80% (16/20)",
+  "fixtures": [
+    {"company": "Stripe",         "url": "https://boards.greenhouse.io/stripe",                      "expected_ats": "greenhouse"},
+    {"company": "Shopify",        "url": "https://boards.greenhouse.io/shopify",                     "expected_ats": "greenhouse"},
+    {"company": "Klarna",         "url": "https://klarna.wd3.myworkdayjobs.com/en-US/job/123",       "expected_ats": "workday"},
+    {"company": "Spotify",        "url": "https://spotify.wd3.myworkdayjobs.com/en-US/job/123",      "expected_ats": "workday"},
+    {"company": "Asana",          "url": "https://boards.greenhouse.io/asana",                       "expected_ats": "greenhouse"},
+    {"company": "Datadog",        "url": "https://boards.greenhouse.io/datadog",                     "expected_ats": "greenhouse"},
+    {"company": "Cloudflare",     "url": "https://boards.greenhouse.io/cloudflare",                  "expected_ats": "greenhouse"},
+    {"company": "Notion",         "url": "https://jobs.ashbyhq.com/notion/abc",                      "expected_ats": "ashby"},
+    {"company": "Linear",         "url": "https://jobs.ashbyhq.com/linear/abc",                      "expected_ats": "ashby"},
+    {"company": "Ramp",           "url": "https://boards.greenhouse.io/ramp",                        "expected_ats": "greenhouse"},
+    {"company": "OpenAI",         "url": "https://jobs.ashbyhq.com/openai/abc",                      "expected_ats": "ashby"},
+    {"company": "Figma",          "url": "https://boards.greenhouse.io/figma",                       "expected_ats": "greenhouse"},
+    {"company": "Zalando",        "url": "https://boards.greenhouse.io/zalando",                     "expected_ats": "greenhouse"},
+    {"company": "Delivery Hero",  "url": "https://jobs.smartrecruiters.com/DeliveryHero/abc",        "expected_ats": "smartrecruiters"},
+    {"company": "N26",            "url": "https://apply.workable.com/n26",                           "expected_ats": "workable"},
+    {"company": "Celonis",        "url": "https://celonis.wd3.myworkdayjobs.com/en-US/job/123",      "expected_ats": "workday"},
+    {"company": "Personio",       "url": "https://personio.jobs.personio.com/x",                     "expected_ats": "personio"},
+    {"company": "Workday",        "url": "https://workday.wd5.myworkdayjobs.com/en-US/job/123",      "expected_ats": "workday"},
+    {"company": "BambooHR Demo",  "url": "https://demo.bamboohr.com/jobs/view.php?id=123",           "expected_ats": "bamboohr"},
+    {"company": "Lever Demo",     "url": "https://jobs.lever.co/vendor/abc",                         "expected_ats": "lever"}
+  ]
+}

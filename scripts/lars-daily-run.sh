@@ -27,6 +27,12 @@
 # ║    Defaults to yesterday's tab — the most common case is "review    ║
 # ║    yesterday's batch, sync before today's scrape at 09:00".          ║
 # ║                                                                      ║
+# ║  Sheet delivery (ADOPT-10):                                          ║
+# ║    `--sheet` writes today's scored batch into a YYYY-MM-DD tab on    ║
+# ║    the configured Google Sheet. Reuses the same Hermes service       ║
+# ║    account as gpl-love (~/.hermes/credentials/google-service-account  ║
+# ║    .json). Idempotent — re-running overwrites the day's tab.        ║
+# ║                                                                      ║
 # ║  Usage:                                                              ║
 # ║    bash scripts/lars-daily-run.sh                       # daily run  ║
 # ║    bash scripts/lars-daily-run.sh --dry-run             # no Discord║
@@ -58,6 +64,7 @@ SYNC_FROM_SHEET_TAB=""
 APPLY_MODE=0
 SCRAPE_SOURCES="stepstone,xing,arbeitsagentur"   # ADOPT-13 default — LinkedIn needs JobSpy
 SKIP_SCRAPE=0
+SHEET_MODE=0   # ADOPT-10: also write the daily batch to today's Google Sheet tab
 REST_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -82,12 +89,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --source=*)       SCRAPE_SOURCES="${1#--source=}" ;;
     --skip-scrape)    SKIP_SCRAPE=1 ;;
+    --sheet)          SHEET_MODE=1 ;;    # ADOPT-10
     -h|--help)
       sed -n '2,40p' "$0"
       echo
       echo "Scrape flags (ADOPT-13):"
       echo "  --source stepstone,xing,arbeitsagentur  Comma-separated scraper sources (default)"
       echo "  --skip-scrape                           Skip scraping step (use existing DB data)"
+      echo
+      echo "Sheet flags (ADOPT-10):"
+      echo "  --sheet                                 After the batch step, write today's jobs to"
+      echo "                                          today's YYYY-MM-DD tab. Needs GOOGLE_SPREADSHEET_ID"
+      echo "                                          + GOOGLE_APPLICATION_CREDENTIALS in .env."
       exit 0
       ;;
     *)                REST_ARGS+=("$1") ;;
@@ -499,7 +512,52 @@ if [[ $batch_rc -ne 0 ]]; then
   fail "batch_pipeline exited $batch_rc — see $ERROR_LOG"
 fi
 
-log "Step 3/3: send friendly summary even if batch was empty"
+# ───────────────────────────────────────────────────────────────────────
+# ADOPT-10: write today's scored batch into today's YYYY-MM-DD Sheet tab.
+# Runs after batch_pipeline (so the day's CV/CL pipeline is already done)
+# and before the Discord summary (so failures here can be reflected in the
+# summary line). Re-running the same date is idempotent — the tab's data
+# block is wiped and rewritten, no duplicates.
+# ───────────────────────────────────────────────────────────────────────
+if [[ "$SHEET_MODE" -eq 1 ]]; then
+  if [[ -z "${GOOGLE_SPREADSHEET_ID:-}" ]]; then
+    log "[WARN] --sheet requested but GOOGLE_SPREADSHEET_ID is not set in .env — skipping sheet write."
+    log "[WARN] See .env.example and docs/DAILY-RUN.md §1.3 to set it up."
+  else
+    log "ADOPT-10 sheet write: sheet=$GOOGLE_SPREADSHEET_ID  db=$DB_PATH"
+    TODAY_TAB="$(date -u +%Y-%m-%d)"
+
+    # Schema pre-flight: ADOPT-11 added columns used here. ADOPT-10 is fine
+    # without them, but the SELECT below reads rejection_reason if present.
+    /usr/bin/env python3 - "$DB_PATH" <<PY 2>&1 || log "(schema migration skipped)"
+import sys
+sys.path.insert(0, "$PROJECT_DIR")
+try:
+    from scripts.migrate_schema_add_approval_columns import migrate
+    migrate(sys.argv[1])
+except Exception as e:
+    print(f"migrate skipped: {e}")
+PY
+
+    set +e
+    /usr/bin/env python3 -m src.sheet.google_writer \
+      --sheet-id "$GOOGLE_SPREADSHEET_ID" \
+      --db "$DB_PATH" \
+      --tab "$TODAY_TAB" \
+      --limit 50 \
+      --min-score 20 2>&1
+    sheet_rc=$?
+    set -e
+
+    if [[ $sheet_rc -ne 0 ]]; then
+      log "[WARN] sheet write exited $sheet_rc — see $ERROR_LOG for details"
+    else
+      log "ADOPT-10 sheet write OK ($TODAY_TAB)"
+    fi
+  fi
+fi
+
+log "Step 4/4: send friendly summary even if batch was empty"
 TOP_TIER_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute(\"SELECT COUNT(*) FROM jobs WHERE score>=150\").fetchone()[0])")"
 STANDARD_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute(\"SELECT COUNT(*) FROM jobs WHERE score>=80 AND score<150\").fetchone()[0])")"
 TOTAL_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs').fetchone()[0])")"

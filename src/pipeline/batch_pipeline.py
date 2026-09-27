@@ -44,6 +44,12 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 # When 1, cover letters use our ATS-safe templates + 4-track WHY-YOU YAML
 # (port ADOPT-3). When 0, fall back to dome317's in-Python cover_letter_generator.py.
 USE_ATS_TEMPLATES = os.getenv("USE_ATS_TEMPLATES", "1") == "1"
+# ADOPT-14: career page auto-discovery (3-layer strategy + 18 ATS detectors).
+# When 1, after scoring and before doc generation we run layer1 (JobSpy xref),
+# layer2 (StepStone redirect), and layer3 (website probe) to populate the
+# jobs.career_url + jobs.ats_type columns. These columns feed ADOPT-12 (CUA submit).
+CAREER_DISCOVERY_ENABLED = os.getenv("CAREER_DISCOVERY_ENABLED", "1") == "1"
+CAREER_DISCOVERY_MAX_JOBS = int(os.getenv("CAREER_DISCOVERY_MAX_JOBS", "50"))
 
 # CV variant mapping: keywords -> variant tagline
 CV_VARIANTS = {
@@ -291,8 +297,20 @@ def main():
     log.info("Selected %d jobs (score >= %d)", len(rows), args.min_score)
 
     if args.dry_run:
+        # ADOPT-14: dry-run also exercises career discovery so the count shows up.
+        if CAREER_DISCOVERY_ENABLED and rows:
+            try:
+                from src.discovery.career_discovery import discover_career_for_jobs
+                counts = discover_career_for_jobs(conn, max_jobs=min(len(rows), CAREER_DISCOVERY_MAX_JOBS))
+                log.info("Career URLs discovered: %d (L1=%d L2=%d L3=%d)",
+                         counts["total"], counts["layer1"], counts["layer2"], counts["layer3"])
+            except Exception as e:
+                log.warning("Career discovery skipped (dry-run): %s", e)
         for r in rows:
+            cu = (r["career_url"] or "")[:60] if "career_url" in r.keys() else ""
             print(f"  {r['score']:4d} | {r['source']:12s} | {r['title'][:55]:55s} | {r['company'][:25]}")
+            if cu:
+                print(f"        └─ career: {cu}")
         conn.close()
         return
 
@@ -300,6 +318,32 @@ def main():
         log.info("No jobs to process")
         conn.close()
         return
+
+    # ADOPT-14: career page auto-discovery runs AFTER scoring (so we only probe
+    # jobs worth applying to) and BEFORE doc generation (so the application
+    # documents can link to the direct career page + ATS-aware resume).
+    # Sets jobs.career_url + jobs.ats_type for ADOPT-12 (CUA submit) to consume.
+    career_counts = None
+    if CAREER_DISCOVERY_ENABLED:
+        try:
+            from src.discovery.career_discovery import discover_career_for_jobs
+            career_counts = discover_career_for_jobs(
+                conn, max_jobs=min(len(rows), CAREER_DISCOVERY_MAX_JOBS)
+            )
+            log.info("Career URLs discovered: %d (L1=%d L2=%d L3=%d)",
+                     career_counts["total"], career_counts["layer1"],
+                     career_counts["layer2"], career_counts["layer3"])
+            # Refresh the row dicts so the doc-generation step sees the new URLs.
+            if career_counts["total"] > 0:
+                rows = conn.execute("""
+                    SELECT id, title, company, location, url, career_url, score, source, description
+                    FROM jobs
+                    WHERE score >= ? AND status NOT IN ('applied', 'filtered_out', 'batched', 'skipped')
+                    ORDER BY score DESC
+                    LIMIT ?
+                """, (args.min_score, args.limit)).fetchall()
+        except Exception as e:
+            log.warning("Career discovery failed (continuing without): %s", e)
 
     # Create batch directory
     batch_date = datetime.now().strftime("%Y-%m-%d")

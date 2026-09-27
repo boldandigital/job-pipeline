@@ -78,20 +78,61 @@ Discord: mode=bot  channel=1497988205788663991     # ✅ what you want
 Discord: mode=…     channel=                       # ❌ no creds resolved — see docs/SECRETS.md
 ```
 
-### 1.4 Smoke test — what would batch produce today?
+### 1.4 Daily review flow (ADOPT-11)
+
+After the cron fires and updates the Sheet, here's the daily loop:
 
 ```bash
-bash scripts/lars-daily-run.sh --dry-run
+# (a) Sync yesterday's marks into SQLite (runs offline, no Discord needed)
+bash scripts/lars-daily-run.sh --sync-from-sheet
+
+# (b) Or sync a specific tab (e.g. when you're catching up on the weekend)
+bash scripts/lars-daily-run.sh --sync-from-sheet 2026-09-26
+
+# (c) Preview what would be applied today (no files written)
+bash bin/apply-from-sheet.sh --dry-run
+
+# (d) Generate the ready-to-apply ZIP (tailored CV + Anschreiben per approved job)
+bash scripts/lars-daily-run.sh --apply
+# equivalently:
+bash bin/apply-from-sheet.sh
+
+# (e) Limit batch size or pick a single job
+bash bin/apply-from-sheet.sh --limit 10
+bash bin/apply-from-sheet.sh --job 42
 ```
 
-Outputs the top 20 jobs (by score) but generates no documents and sends no Discord.
+The sync step is idempotent — running it twice in a row produces the same
+DB state. `approved_at` is set on first approval and **never** overwritten
+on re-sync. Rejections get enum-keyed analytics so you can tune `config/lars.yaml`
+without spelunking through raw Sheet rows.
 
-> **Day-1 note:** On a fresh checkout the `jobs` table doesn't exist yet — scrapers create it on first run. So `--dry-run` is expected to fail with `no such table: jobs` until you run at least one scrape:
->
-> ```bash
-> python3 -m src.scrapers.arbeitsagentur_scraper --db ./data/jobs.db
-> bash scripts/lars-daily-run.sh --dry-run       # now produces real output
-> ```
+If `GOOGLE_SPREADSHEET_ID` is not set in `.env`, `--sync-from-sheet` exits
+0 with a warning (cron-friendly: doesn't break the run, just skips the sync).
+
+### 1.5 Rejection-driven tuning (ADOPT-11)
+
+Every rejection in the Sheet is a data point. Run the dashboard weekly:
+
+```bash
+python3 -m src.analytics.rejection_dashboard --db ./data/jobs.db --window-days 30
+# → writes research/rejection-patterns-YYYY-MM.md
+```
+
+The report groups rejections by reason (`too_junior`, `wrong_location`,
+`salary_too_low`, etc.) and surfaces the top 3 with **suggested** config
+tweaks — e.g. "if `too_junior` is dominant, raise `scoring.threshold` from
+20 → 30 in `config/lars.yaml`". Suggestions are comments; you apply them
+by hand. The script is read-only against SQLite.
+
+Raw JSON for piping into other tools:
+
+```bash
+python3 -m src.analytics.rejection_dashboard --db ./data/jobs.db --window-days 30 --json
+```
+
+The `--window-days` flag lets you backfill: `7` for the last week, `90` for
+a quarterly view, etc.
 
 ---
 
@@ -316,12 +357,23 @@ launchctl unload ~/Library/LaunchAgents/com.boldandigital.jobpipeline.plist
 ├── .env.example               ← template (committed)
 ├── config/
 │   ├── delivery.yaml          ← Discord framing (committed, no secrets). ADOPT-8: bot + webhook modes.
+│   ├── lars.yaml              ← Lars's tuned scoring + queries (committed). ADOPT-14: career_discovery section.
 │   └── example.yaml           ← scoring + queries (committed)
 ├── scripts/
 │   └── lars-daily-run.sh      ← cron target (chmod +x). ADOPT-8: bot-mode default + webhook fallback.
+│                                  ADOPT-14: dry-run prints "Career URLs discovered: N" + ats count.
+├── src/
+│   ├── discovery/
+│   │   └── career_discovery.py   ← ADOPT-14: 3-layer career URL discovery + 18 ATS detectors
+│   └── pipeline/
+│       └── batch_pipeline.py     ← ADOPT-14: hooks career discovery after scoring, before docs
+├── tests/
+│   ├── test_career_discovery.py  ← ADOPT-14: 60+ tests covering ATS detection, robots, idempotency
+│   └── fixtures/
+│       └── ats_test_cases.json   ← ADOPT-14: 20 known ATS deployments
 ├── docs/
 │   ├── DAILY-RUN.md           ← this file
-│   └── SECRETS.md             ← cross-project secret-sharing pattern (ADOPT-8)
+│   └── SECRETS.md            ← cross-project secret-sharing pattern (ADOPT-8)
 └── logs/                      ← gitignored, self-rotating
     ├── lars-daily-YYYYMMDD.log
     └── lars-error-YYYYMMDD.log
@@ -329,3 +381,47 @@ launchctl unload ~/Library/LaunchAgents/com.boldandigital.jobpipeline.plist
 
 **Where the Discord secrets actually live:** `~/.hermes/.env` (gitignored, owned by the Hermes project).
 `docs/SECRETS.md` explains the cross-project sharing pattern and how to override the fallback path.
+
+---
+
+## 9. ADOPT-14: CAREER URL COLUMNS
+
+After ADOPT-14, two new columns feed ADOPT-12 (CUA submit):
+
+| Column        | Type     | What it holds                                              |
+|---------------|----------|------------------------------------------------------------|
+| `career_url`  | `TEXT`   | Direct company career page URL (NOT a portal URL)          |
+| `ats_type`    | `TEXT`   | One of: workday, greenhouse, lever, ashby, smartrecruiters, icims, sap_sf, taleo, softgarden, personio, workable, breezy, bamboohr, jobvite, recruitee, join, coveto, umantis, unknown |
+
+**When does it run?** After scoring (step 2/4), inside `batch_pipeline.py` step 3/4 (top 50 jobs). Also runs in `--dry-run` so you can preview before applying.
+
+**Why it matters:**
+- Senior roles (Founder / CTO / Head-of-Digital) rarely post to LinkedIn / StepStone — they live on the company's own career page.
+- 80% of senior leadership roles are NOT on job boards. Without career URL discovery, we miss them entirely.
+- ATS detection enables ATS-aware resume tailoring (e.g. Workday needs different formatting than Greenhouse).
+
+**Query examples:**
+```sql
+-- Jobs with a known ATS (ready for CUA submit)
+SELECT title, company, career_url, ats_type
+FROM jobs WHERE career_url IS NOT NULL AND career_url != '';
+
+-- Coverage report
+SELECT ats_type, COUNT(*) AS n
+FROM jobs WHERE ats_type IS NOT NULL AND ats_type != ''
+GROUP BY ats_type ORDER BY n DESC;
+
+-- Jobs that still need discovery (career_url is NULL)
+SELECT COUNT(*) FROM jobs WHERE career_url IS NULL OR career_url = '';
+```
+
+**Override knobs (env vars):**
+- `CAREER_DISCOVERY_ENABLED=0` — skip the entire layer (fall back to portal-only URLs)
+- `CAREER_DISCOVERY_MAX_JOBS=20` — lower the cap for faster dry-runs
+
+**Constraints (enforced in `src/discovery/career_discovery.py`):**
+- `robots.txt` respected — if `Disallow: /careers`, that path is skipped and logged
+- Login walls skipped — no jobs visible without auth → don't waste CUA attempts
+- 1 request/sec per domain (politeness)
+- 30-day in-memory cache — once we find `boldandigital.com/careers`, don't re-probe for 30 days
+- Idempotent — never overwrites a populated `career_url` (reruns are safe)
