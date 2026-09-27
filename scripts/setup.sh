@@ -189,6 +189,17 @@ else
   log "SQLite database already exists"
 fi
 
+# Schema migration: ensure jobs.career_url + jobs.description exist on older
+# DBs whose CREATE TABLE pre-dated ADOPT-6 (arbeitsagentur/stepstone scrapers
+# omitted them). Idempotent — safe on every setup re-run.
+if command -v python3 &>/dev/null; then
+  python3 "$INSTALL_DIR/scripts/migrate_schema_add_career_description.py" --db "$DB_PATH" 2>>"$LOGFILE" \
+    && log "Schema migration applied" \
+    || warn "Schema migration failed (non-fatal — see $LOGFILE)"
+else
+  warn "python3 not found — skipping schema migration; run scripts/migrate_schema_add_career_description.py manually"
+fi
+
 # ============================================================
 # PHASE 8: UFW Firewall
 # ============================================================
