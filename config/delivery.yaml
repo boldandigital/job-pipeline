@@ -1,14 +1,14 @@
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║  DAILY DELIVERY — Telegram delivery config (Lars's Mac, ADOPT-5)      ║
+# ║  DAILY DELIVERY — Discord webhook config (Lars's Mac, ADOPT-7)         ║
 # ║                                                                      ║
 # ║  Picked up by scripts/lars-daily-run.sh → sends summary + ZIP via     ║
-# ║  Telegram Bot API. Loaded by the wrapper, NOT by batch_pipeline.py.   ║
+# ║  Discord webhooks. Loaded by the wrapper, NOT by batch_pipeline.py.   ║
 # ║                                                                      ║
-# ║  Secrets are NOT here — TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID live    ║
-# ║  in `.env` (gitignored).                                              ║
+# ║  Secrets are NOT here — DISCORD_WEBHOOK_URL lives in `.env`           ║
+# ║  (gitignored). This file only carries framing + limits.               ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
-telegram:
+discord:
   enabled: true                              # flip to false to mute without uninstalling cron
 
   # Daily summary message framing
@@ -18,11 +18,14 @@ telegram:
     dashboard_url: "http://127.0.0.1:8080"    # localhost-only; tunnel if remote
     top_n_jobs_in_summary: 5
     include_overview_md: false                # attach OVERVIEW.md? (extra request)
+    # Discord lets us use rich embeds — leave color null for the default
+    # sidebar accent. 0x1ABC9C is a teal that pairs nicely with the ⚓ vibe.
+    embed_color: null
 
   # Document delivery
   documents:
     attach_zip: true
-    max_zip_size_mb: 45                       # Telegram bot limit = 50MB; keep headroom
+    max_zip_size_mb: 24                       # Discord webhook cap = 25MB; keep headroom
     min_score_to_include: 20                  # skip batched jobs below this score
     max_jobs_per_batch: 50
 

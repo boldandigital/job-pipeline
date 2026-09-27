@@ -1,6 +1,6 @@
 # DAILY RUN — Runbook
 
-Cron setup, Telegram bot wiring, and operational playbook for the daily 09:00 Brussels batch.
+Cron setup, Discord webhook wiring, and operational playbook for the daily 09:00 Brussels batch.
 
 Owner: **Lars** (`contact@boldandigital.com`)
 Project: `/Users/lars/Documents/Projects/job-pipeline/`
@@ -11,36 +11,45 @@ Status at last review: **awaiting human "go" to enable.** The cron entry below i
 
 ## 1. ONE-TIME SETUP
 
-### 1.1 Create the Telegram bot (do this on your phone or laptop, ~2 minutes)
+### 1.1 Create the Discord webhook (do this on your desktop or phone, ~2 minutes)
 
-1. Open Telegram, message **[@BotFather](https://t.me/BotFather)**
-2. Send `/newbot`
-3. Name it: `Lars Job Pipeline Bot` (or whatever you like)
-4. Username: `lars_jobp_bot` (must end in `bot`, must be unique)
-5. Copy the **token** BotFather replies with → paste into `.env` as `TELEGRAM_BOT_TOKEN`
-6. From your Telegram account (with the bot open), send `/start` to the new bot — this is required so the bot can message you
-7. Get your **chat_id** (numeric, not your @handle):
-   ```bash
-   curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates" | python3 -c "import sys,json; d=json.load(sys.stdin); [print(m['message']['chat']['id']) for m in d['result']]"
-   ```
-   → paste that number into `.env` as `TELEGRAM_CHAT_ID`
+Discord webhooks are fire-and-forget HTTP endpoints — no bot token, no chat_id lookup, no polling. Just one URL to paste.
+
+1. Open Discord and pick the channel you want job-pipeline alerts in (create one if you don't have a private spot — `#job-pipeline-batches` is fine)
+2. Click the channel **⚙️ Settings** (gear icon) → **Integrations** → **Webhooks**
+3. Click **New Webhook**
+4. Name it `Lars Job Pipeline` (or whatever you like); pick the channel you want it posting to
+5. Click **Copy Webhook URL**
+6. Paste the URL into `.env` as `DISCORD_WEBHOOK_URL`
+7. (Optional) Set `DISCORD_USERNAME=Lars Job Pipeline` in `.env` to override the webhook's default bot name
+
+That's it — no `/start` chat with the bot, no `@BotFather`, no numeric chat_id. The webhook URL is the only secret.
+
+**Why Discord over Telegram** (one-time context, won't repeat):
+
+- **One secret, not two** — webhook URL replaces bot token + chat_id
+- **Native file preview** — PDFs render inline, images get thumbnails, no more "download ZIP to see what happened"
+- **Richer Markdown** — embeds, code blocks, tables all render; the daily batch summary now ships with a structured embed (`title` + `fields` + `footer`)
+- **Threads** — replies to a webhook message can carry the ZIP instead of stuffing it into one message
+- **No polling** — webhooks are fire-and-forget HTTP POSTs; no Telegram long-poll state to manage
+- **25 MB per file** — slightly tighter than Telegram's 50 MB cap, but `config/delivery.yaml` already keeps a 24 MB headroom (`max_zip_size_mb: 24`)
 
 ### 1.2 Wire `.env`
 
 ```bash
 cd /Users/lars/Documents/Projects/job-pipeline
 cp .env.example .env
-nano .env   # fill in ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+nano .env   # fill in ANTHROPIC_API_KEY, DISCORD_WEBHOOK_URL
 chmod 600 .env                 # keep secrets off prying eyes
 ```
 
-### 1.3 Smoke test — Telegram ping
+### 1.3 Smoke test — Discord ping
 
 ```bash
 bash scripts/lars-daily-run.sh --test
 ```
 
-You should receive `⚓ job-pipeline ping — creds OK, ready for daily run.` on Telegram within 30 seconds. If you don't, re-check `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and that you actually sent `/start` to the bot.
+You should receive `⚓ job-pipeline ping — creds OK, ready for daily run.` in your Discord channel within 5 seconds. If you don't, re-check `DISCORD_WEBHOOK_URL` — the most common slip is a stray space, trailing newline, or pasting the *Copy* button instead of the actual webhook URL.
 
 ### 1.4 Smoke test — what would batch produce today?
 
@@ -48,7 +57,7 @@ You should receive `⚓ job-pipeline ping — creds OK, ready for daily run.` on
 bash scripts/lars-daily-run.sh --dry-run
 ```
 
-Outputs the top 20 jobs (by score) but generates no documents and sends no Telegram.
+Outputs the top 20 jobs (by score) but generates no documents and sends no Discord.
 
 > **Day-1 note:** On a fresh checkout the `jobs` table doesn't exist yet — scrapers create it on first run. So `--dry-run` is expected to fail with `no such table: jobs` until you run at least one scrape:
 >
@@ -99,7 +108,7 @@ A ready-to-go `~/Library/LaunchAgents/com.boldandigital.jobpipeline.plist` is be
 | How big are the logs? | `du -sh logs/` |
 | Top scorers right now? | `sqlite3 data/jobs.db "SELECT title, company, score FROM jobs WHERE score >= 100 ORDER BY score DESC LIMIT 10;"` |
 | Full batch preview | `bash scripts/lars-daily-run.sh --dry-run` |
-| Re-send today's batch ZIP via Telegram | `bash scripts/lars-daily-run.sh` (re-runs full pipeline, idempotent on DB) |
+| Re-send today's batch ZIP via Discord | `bash scripts/lars-daily-run.sh` (re-runs full pipeline, idempotent on DB) |
 
 ---
 
@@ -111,7 +120,7 @@ A ready-to-go `~/Library/LaunchAgents/com.boldandigital.jobpipeline.plist` is be
 | Pause indefinitely | `crontab -e` → delete the `ADOPT-5` line |
 | Nuclear: kill cron entirely | `crontab -r` (removes ALL your cron jobs — be sure) |
 | Re-enable after pause | uncomment the line in `crontab -e`, save |
-| Disable Telegram only (cron keeps running) | `telegram: enabled: false` in `config/delivery.yaml`, then touch `./logs/.muted` |
+| Disable Discord only (cron keeps running) | `discord: enabled: false` in `config/delivery.yaml`, then touch `./logs/.muted` |
 
 Logs keep writing when paused — that's intentional (you want a paper trail).
 
@@ -121,7 +130,7 @@ Logs keep writing when paused — that's intentional (you want a paper trail).
 
 This is the rejection-tuning loop:
 
-1. Read the Telegram summary — which company/role was the lowest-rated you tolerated?
+1. Read the Discord summary — which company/role was the lowest-rated you tolerated?
 2. Open `config/example.yaml` (or `config/settings.yaml` if you've copied it) → `scoring.weights.negative_signals`
 3. Bump `recruiters: -200` → `-400` (kills Agency spam)
 4. Lower `threshold: 20` → `threshold: 30` (stricter minimum) or raise it to `40` if you're drowning in noise
@@ -185,8 +194,8 @@ launchctl unload ~/Library/LaunchAgents/com.boldandigital.jobpipeline.plist
 
 ## 7. CONSTRAINTS / GUARDRAILS (do NOT skip)
 
-- **Do not install cron** until you have a working Telegram ping — that's a 5-minute smoke test, not optional.
-- **Do not commit `.env`.** It's gitignored. If you accidentally commit a token, rotate it via @BotFather → `/revoke`.
+- **Do not install cron** until you have a working Discord ping — that's a 5-minute smoke test, not optional.
+- **Do not commit `.env`.** It's gitignored. If you accidentally commit a webhook URL, rotate it via Discord channel ⚙️ Settings → Integrations → Webhooks → regenerate (or delete + recreate the webhook).
 - **DB growth:** `data/jobs.db` grows ~5 MB/week. Vacuum monthly:
   ```bash
   sqlite3 data/jobs.db "VACUUM;"
@@ -203,7 +212,7 @@ launchctl unload ~/Library/LaunchAgents/com.boldandigital.jobpipeline.plist
 ├── .env                       ← SECRETS (gitignored, chmod 600)
 ├── .env.example               ← template (committed)
 ├── config/
-│   ├── delivery.yaml          ← Telegram framing (committed, no secrets)
+│   ├── delivery.yaml          ← Discord framing (committed, no secrets)
 │   └── example.yaml           ← scoring + queries (committed)
 ├── scripts/
 │   └── lars-daily-run.sh      ← cron target (chmod +x)

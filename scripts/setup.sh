@@ -127,9 +127,10 @@ if [[ ! -f "$ENV_FILE" ]]; then
 # Anthropic API Key (from console.anthropic.com)
 ANTHROPIC_API_KEY=your-key-here
 
-# Telegram Bot Token (from @BotFather)
-TELEGRAM_BOT_TOKEN=your-bot-token
-TELEGRAM_CHAT_ID=your-chat-id
+# Discord Webhook URL (from channel ⚙️ Settings → Integrations → Webhooks)
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<your_id>/<your_token>
+# Optional: override the webhook bot's display name
+# DISCORD_USERNAME=Lars Job Pipeline
 
 # Proxy for scraping (optional, recommended for Indeed)
 PROXY_URL=http://user:pass@proxy-host:port

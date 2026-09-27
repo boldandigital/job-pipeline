@@ -32,7 +32,7 @@ JOBSPY_DB_PATH=$INSTALL_DIR/data/jobspy.db
 # 03:00 — Score and filter new jobs
 0 3 * * * cd $INSTALL_DIR && python3 -m src.scoring.score_jobs --db \$DB_PATH >> logs/scoring.log 2>&1
 
-# 04:00 — Batch pipeline (Top 50 → CV + CL → ZIP → Telegram)
+# 04:00 — Batch pipeline (Top 50 → CV + CL → ZIP → Discord)
 0 4 * * * cd $INSTALL_DIR && python3 -m src.pipeline.batch_pipeline --db \$DB_PATH --limit 50 >> logs/batch.log 2>&1
 
 # 08:30 — Extended scraping (StepStone browser automation)

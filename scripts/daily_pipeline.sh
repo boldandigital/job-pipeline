@@ -2,13 +2,17 @@
 # Daily Job Pipeline — runs all steps sequentially
 # Schedule: 02:00 UTC daily via cron
 #
-# Required env vars: DB_PATH, TELEGRAM_CHAT_ID (optional)
+# Required env vars: DB_PATH, DISCORD_WEBHOOK_URL (optional)
+#
+# NOTE: Lars's wrapper (scripts/lars-daily-run.sh) handles delivery for the
+# macOS-local 09:00 Brussels cron. This dome317 stock file is kept aligned for
+# whoever runs the upstream pipeline directly (Docker compose path).
 
 set -euo pipefail
 
 LOG="${LOG_DIR:-/tmp}/daily_pipeline.log"
 DB="${DB_PATH:-./data/jobs.db}"
-CHAT="${TELEGRAM_CHAT_ID:-}"
+WEBHOOK="${DISCORD_WEBHOOK_URL:-}"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== DAILY PIPELINE START: $(date) ===" >> "$LOG"
@@ -51,16 +55,15 @@ print(f'Premium: {p} | Standard: {s} | Total: {p+s} eligible')
 
 echo "Results: +${NEW} new jobs. ${STATS}" >> "$LOG"
 
-# Telegram notification (optional)
-if [ -n "$CHAT" ] && [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+# Discord webhook notification (optional)
+if [ -n "$WEBHOOK" ]; then
   python3 -c "
 from urllib.request import Request, urlopen
 import json, os
-token = os.environ['TELEGRAM_BOT_TOKEN']
-chat = os.environ['TELEGRAM_CHAT_ID']
+webhook = os.environ['DISCORD_WEBHOOK_URL']
 msg = f'Daily Pipeline done\n\n+${NEW} new jobs (Total: ${AFTER})\n${STATS}'
-data = json.dumps({'chat_id': chat, 'text': msg}).encode()
-req = Request(f'https://api.telegram.org/bot{token}/sendMessage', data=data)
+data = json.dumps({'content': msg}).encode()
+req = Request(webhook, data=data)
 req.add_header('Content-Type', 'application/json')
 urlopen(req, timeout=30)
 " >> "$LOG" 2>&1 || true
