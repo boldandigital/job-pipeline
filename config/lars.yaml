@@ -81,6 +81,21 @@ parallel:
 #   2. technical_leadership               — CTO/Head-of-Engineering
 #   3. agency_hosting_specialist          — niche: where Lars's 12+ years land
 # DACH + Benelux + remote are surfaced in `search.locations` above.
+
+# ============================================================
+# ADOPT-13: XING-specific queries + DACH location filter
+# XING is a DACH-native network (DE/AT/CH) — no broad remote filter.
+# The 5 queries below are the seed list passed to scripts/lars-daily-run.sh
+# via the XING branch of run_scrapers() (--source xing).
+# ============================================================
+xing_queries:
+  - "founder digital"                 # EN: founder/CTO/Co-Founder roles
+  - "cto startup"                     # EN: explicit CTO at early-stage
+  - "head of digital"                 # EN: senior leadership
+  - "managing director agency"        # EN: agency MD track
+  - "geschäftsführer digital"         # DE: MD (Geschäftsführer) for higher DACH recall
+
+xing_location: "Deutschland"          # XING's location filter. DACH-heavy by default.
 queries:
 
   # ─────────────────────────────────────────────────────────
@@ -591,3 +606,32 @@ scoring:
       - "hong kong only"
       - "tokyo only"
       - "shanghai only"
+
+# ============================================================
+# CAREER DISCOVERY — ADOPT-14
+# ============================================================
+# Finds the official company career page + ATS type for each scored job.
+# Three-layer strategy (no search engine dependency):
+#   Layer 1: JobSpy DB cross-reference (job_url_direct)
+#   Layer 2: StepStone / portal redirect parsing
+#   Layer 3: Direct website probing (guess domain, try /careers /jobs etc.)
+# Populates jobs.career_url + jobs.ats_type — fed by ADOPT-12 (CUA submit).
+#
+# Constraints (enforced in src/discovery/career_discovery.py):
+#   - robots.txt respected (urllib.robotparser, fail-open)
+#   - Login walls skipped (no jobs visible without auth)
+#   - 1 request/sec per domain (rate-limited)
+#   - 30-day cache (in-memory, per company)
+#   - Idempotent: never overwrites a populated career_url
+#
+# 18 ATS detectors (URL pattern + HTML signature):
+#   workday, greenhouse, lever, ashby, smartrecruiters, icims,
+#   successfactors (sap_sf), taleo, softgarden, personio, workable,
+#   breezy, bamboohr, jobvite, recruitee, join, coveto, umantis
+career_discovery:
+  enabled: true                # gate the entire layer (off = skip all probes)
+  max_companies_per_run: 50    # hard cap on probing per daily run
+  probe_timeout_seconds: 5     # per-request timeout (HEAD/GET)
+  respect_robots_txt: true     # fail-open: only definite Disallow blocks us
+  cache_ttl_days: 30           # how long to remember a probed company
+  jobspy_db_path: "./data/jobspy.db"  # path to JobSpy SQLite for Layer 1

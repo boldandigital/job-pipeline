@@ -16,11 +16,28 @@
 # ║    mode when only DISCORD_WEBHOOK_URL is set (e.g. dome317 Docker    ║
 # ║    path). See docs/SECRETS.md for cross-project secret sharing.     ║
 # ║                                                                      ║
+# ║  Scraping (ADOPT-13):                                                 ║
+# ║    Default sources = stepstone,xing,arbeitsagentur. XING is the     ║
+# ║    DACH-native 4th platform (LinkedIn needs JobSpy — not set up).    ║
+# ║    Use --source <csv> to override, --skip-scrape to use existing DB. ║
+# ║                                                                      ║
+# ║  Sheet approval loop (ADOPT-11):                                      ║
+# ║    `--sync-from-sheet [tab]` reads ★ / ✗ marks from the named tab   ║
+# ║    and applies them to the SQLite jobs table (status, rejection_*).  ║
+# ║    Defaults to yesterday's tab — the most common case is "review    ║
+# ║    yesterday's batch, sync before today's scrape at 09:00".          ║
+# ║                                                                      ║
 # ║  Usage:                                                              ║
-# ║    bash scripts/lars-daily-run.sh           # daily run, full         ║
-# ║    bash scripts/lars-daily-run.sh --dry-run # preview top jobs, no   ║
-# ║                                              Discord, no docs        ║
-# ║    bash scripts/lars-daily-run.sh --test    # Discord ping only      ║
+# ║    bash scripts/lars-daily-run.sh                       # daily run  ║
+# ║    bash scripts/lars-daily-run.sh --dry-run             # no Discord║
+# ║    bash scripts/lars-daily-run.sh --test                # ping only  ║
+# ║    bash scripts/lars-daily-run.sh --source xing         # xing only ║
+# ║    bash scripts/lars-daily-run.sh --skip-scrape         # no scrape ║
+# ║    bash scripts/lars-daily-run.sh --sync-from-sheet     # sync yest.║
+# ║    bash scripts/lars-daily-run.sh --sync-from-sheet 2026-09-26       ║
+# ║                                              # sync a specific tab  ║
+# ║    bash scripts/lars-daily-run.sh --apply              # generate   ║
+# ║                                              # apply-zip for appr. ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 set -euo pipefail
@@ -37,16 +54,47 @@ cd "$PROJECT_DIR"
 
 DRY_RUN=0
 TEST_PING=0
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run) DRY_RUN=1 ;;
-    --test)    TEST_PING=1 ;;
+SYNC_FROM_SHEET_TAB=""
+APPLY_MODE=0
+SCRAPE_SOURCES="stepstone,xing,arbeitsagentur"   # ADOPT-13 default — LinkedIn needs JobSpy
+SKIP_SCRAPE=0
+REST_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run)        DRY_RUN=1 ;;
+    --test)           TEST_PING=1 ;;
+    --sync-from-sheet)
+      # next arg is the optional tab name; if absent we'll default to yesterday
+      if [[ "${2:-}" && "${2:-}" != --* ]]; then
+        SYNC_FROM_SHEET_TAB="$2"; shift
+      else
+        SYNC_FROM_SHEET_TAB="__YESTERDAY__"
+      fi
+      ;;
+    --apply)          APPLY_MODE=1 ;;
+    --source)
+      if [[ "${2:-}" && "${2:-}" != --* ]]; then
+        SCRAPE_SOURCES="$2"; shift
+      else
+        echo "[FATAL] --source requires a value (e.g. --source stepstone,xing)" >&2
+        exit 5
+      fi
+      ;;
+    --source=*)       SCRAPE_SOURCES="${1#--source=}" ;;
+    --skip-scrape)    SKIP_SCRAPE=1 ;;
     -h|--help)
-      sed -n '2,30p' "$0"
+      sed -n '2,40p' "$0"
+      echo
+      echo "Scrape flags (ADOPT-13):"
+      echo "  --source stepstone,xing,arbeitsagentur  Comma-separated scraper sources (default)"
+      echo "  --skip-scrape                           Skip scraping step (use existing DB data)"
       exit 0
       ;;
+    *)                REST_ARGS+=("$1") ;;
   esac
+  shift || true
 done
+export SCRAPE_SOURCES
 
 # ───────────────────────────────────────────────────────────────────────
 # Load .env (cron runs with a minimal environment)
@@ -118,11 +166,12 @@ elif [[ -n "${DISCORD_WEBHOOK_URL:-}" ]]; then
   DISCORD_MODE="webhook"
 fi
 
-if [[ "$TEST_PING" -eq 0 && -z "$DISCORD_MODE" ]]; then
+if [[ "$TEST_PING" -eq 0 && -z "$DISCORD_MODE" && "$SYNC_FROM_SHEET_TAB" == "" && "$APPLY_MODE" -eq 0 ]]; then
   echo "[FATAL] No Discord delivery configured. Need one of:" >&2
   echo "  • DISCORD_BOT_TOKEN + DISCORD_CHANNEL_ID (recommended — same Hermes bot)" >&2
   echo "  • DISCORD_WEBHOOK_URL (legacy webhook — see ADOPT-7 commit)" >&2
   echo "  See .env.example and docs/SECRETS.md." >&2
+  echo "  (Note: --sync-from-sheet and --apply don't need Discord — pass that flag if it's missing.)" >&2
   exit 4
 fi
 
@@ -289,6 +338,63 @@ PY
 }
 
 # ───────────────────────────────────────────────────────────────────────
+# ADOPT-11: --sync-from-sheet — read ★ / ✗ marks from the named tab
+# (or yesterday's tab by default) and apply them to SQLite. Runs offline
+# (no Discord), short-circuits the rest of the daily flow. Idempotent —
+# safe to run multiple times per day.
+# ───────────────────────────────────────────────────────────────────────
+if [[ -n "$SYNC_FROM_SHEET_TAB" ]]; then
+  if [[ "$SYNC_FROM_SHEET_TAB" == "__YESTERDAY__" ]]; then
+    SYNC_FROM_SHEET_TAB="$(date -u -v-1d +%Y-%m-%d 2>/dev/null || date -u -d 'yesterday' +%Y-%m-%d)"
+  fi
+  log "ADOPT-11 sync-from-sheet: tab=$SYNC_FROM_SHEET_TAB  db=$DB_PATH"
+
+  if [[ -z "${GOOGLE_SPREADSHEET_ID:-}" ]]; then
+    log "[WARN] GOOGLE_SPREADSHEET_ID not set in .env — sync cannot read the Sheet."
+    log "[WARN] Set it in /Users/lars/Documents/Projects/job-pipeline/.env then retry."
+    log "[WARN] (See .env.example for the key name.)"
+    exit 0
+  fi
+
+  # Pre-flight: ensure the schema has the ADOPT-11 columns. Migration is
+  # idempotent — a no-op when the columns already exist.
+  /usr/bin/env python3 - "$DB_PATH" <<PY 2>&1 || log "(schema migration skipped)"
+import sys
+sys.path.insert(0, "$PROJECT_DIR")
+from scripts.migrate_schema_add_approval_columns import migrate
+migrate(sys.argv[1])
+PY
+
+  set +e
+  /usr/bin/env python3 -m src.sheet.sync_approvals \
+    --sheet-id "$GOOGLE_SPREADSHEET_ID" \
+    --db "$DB_PATH" \
+    "$SYNC_FROM_SHEET_TAB"
+  sync_rc=$?
+  set -e
+
+  if [[ $sync_rc -ne 0 ]]; then
+    log "[WARN] sync_from_sheet exited $sync_rc — see $ERROR_LOG for details"
+  fi
+  log "sync-from-sheet DONE"
+  exit 0
+fi
+
+# ───────────────────────────────────────────────────────────────────────
+# ADOPT-11: --apply — generate tailored CV + Anschreiben for approved jobs
+# Delegates to bin/apply-from-sheet.sh. Same offline semantics as sync.
+# ───────────────────────────────────────────────────────────────────────
+if [[ "$APPLY_MODE" -eq 1 ]]; then
+  log "ADOPT-11 --apply: delegating to bin/apply-from-sheet.sh"
+  APPLY_BIN="$PROJECT_DIR/bin/apply-from-sheet.sh"
+  if [[ ! -x "$APPLY_BIN" ]]; then
+    fail "$APPLY_BIN not executable — run: chmod +x $APPLY_BIN"
+  fi
+  # Pass through any unrecognized flags (e.g. --dry-run, --limit N).
+  exec "$APPLY_BIN" "${REST_ARGS[@]}"
+fi
+
+# ───────────────────────────────────────────────────────────────────────
 # Test-only Discord ping — verifies delivery before enabling cron
 # ───────────────────────────────────────────────────────────────────────
 if [[ "$TEST_PING" -eq 1 ]]; then
@@ -303,23 +409,84 @@ fi
 # Dry-run: print top jobs, no docs, no Discord
 # ───────────────────────────────────────────────────────────────────────
 if [[ "$DRY_RUN" -eq 1 ]]; then
-  log "Dry-run: scoring + selection only"
+  log "Dry-run: scoring + selection + career discovery"
   # SCORING_CONFIG exported above — picked up by score_jobs via --config arg.
   /usr/bin/env SCORING_CONFIG="$SCORING_CONFIG" \
     python3 -m src.scoring.score_jobs --db "$DB_PATH" --config "$SCORING_CONFIG" 2>&1 || true
+  # ADOPT-14: batch_pipeline --dry-run now also runs career discovery and logs
+  # "Career URLs discovered: N (L1=X L2=Y L3=Z)" — see src/pipeline/batch_pipeline.py.
   /usr/bin/env python3 -m src.pipeline.batch_pipeline --db "$DB_PATH" --limit 20 --dry-run
+  CAREER_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE career_url IS NOT NULL AND career_url!=\"\"').fetchone()[0])")"
+  ATS_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE ats_type IS NOT NULL AND ats_type!=\"\"').fetchone()[0])")"
+  log "Dry-run summary: $CAREER_COUNT jobs have career_url, $ATS_COUNT have ATS detected"
   exit 0
 fi
 
 # ───────────────────────────────────────────────────────────────────────
-# Full run: score → batch → CV/CL → ZIP → Discord summary
+# ADOPT-13: scrape step. Default sources = stepstone,xing,arbeitsagentur.
+# LinkedIn is excluded by default — needs JobSpy which we haven't set up.
+# Each source failure is logged but does NOT halt the pipeline (graceful).
+# Set --skip-scrape to bypass (useful for re-scoring on existing data).
 # ───────────────────────────────────────────────────────────────────────
-log "Step 1/3: keyword scoring"
+run_scrapers() {
+  if [[ "$SKIP_SCRAPE" -eq 1 ]]; then
+    log "Scrape step skipped (--skip-scrape)"
+    return 0
+  fi
+  log "Scrape sources: $SCRAPE_SOURCES"
+  IFS=',' read -ra SOURCES <<< "$SCRAPE_SOURCES"
+  for src in "${SOURCES[@]}"; do
+    src="$(echo "$src" | tr -d '[:space:]')"
+    case "$src" in
+      stepstone)
+        log "  scraping stepstone…"
+        set +e
+        /usr/bin/env python3 -m src.scrapers.stepstone_scraper \
+          --queries "Founder" "CTO" "Head of Digital" "Geschäftsführer" \
+          --location "Deutschland" --max-pages 3 --db "$DB_PATH" 2>&1 \
+          || log "  stepstone failed (non-fatal)"
+        set -e
+        ;;
+      xing)
+        log "  scraping xing…"
+        set +e
+        /usr/bin/env python3 -m src.scrapers.xing_scraper \
+          --queries "founder digital" "cto startup" "head of digital" \
+                    "managing director agency" "geschäftsführer digital" \
+          --location "Deutschland" --max-pages 3 --limit 25 --db "$DB_PATH" 2>&1 \
+          || log "  xing failed (non-fatal)"
+        set -e
+        ;;
+      arbeitsagentur)
+        log "  scraping arbeitsagentur…"
+        set +e
+        /usr/bin/env python3 -m src.scrapers.arbeitsagentur_scraper \
+          --queries "Founder" "CTO" "Head of Digital" "Geschäftsführer" \
+          --limit 25 --db "$DB_PATH" 2>&1 \
+          || log "  arbeitsagentur failed (non-fatal)"
+        set -e
+        ;;
+      "")
+        ;;
+      *)
+        log "  unknown source: $src (skipping)"
+        ;;
+    esac
+  done
+}
+
+# ───────────────────────────────────────────────────────────────────────
+# Full run: scrape → score → batch → CV/CL → ZIP → Discord summary
+# ───────────────────────────────────────────────────────────────────────
+log "Step 1/4: scrape (sources=$SCRAPE_SOURCES)"
+run_scrapers
+
+log "Step 2/4: keyword scoring"
 # SCORING_CONFIG exported above — passed both via env and CLI for belt+suspenders.
 /usr/bin/env SCORING_CONFIG="$SCORING_CONFIG" \
   python3 -m src.scoring.score_jobs --db "$DB_PATH" --config "$SCORING_CONFIG" 2>&1 || fail "scoring crashed"
 
-log "Step 2/3: batch pipeline (top 50 → CV + CL → ZIP)"
+log "Step 3/4: batch pipeline (top 50 → CV + CL → ZIP)"
 set +e
 /usr/bin/env python3 -m src.pipeline.batch_pipeline \
   --db "$DB_PATH" \
@@ -336,11 +503,15 @@ log "Step 3/3: send friendly summary even if batch was empty"
 TOP_TIER_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute(\"SELECT COUNT(*) FROM jobs WHERE score>=150\").fetchone()[0])")"
 STANDARD_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute(\"SELECT COUNT(*) FROM jobs WHERE score>=80 AND score<150\").fetchone()[0])")"
 TOTAL_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs').fetchone()[0])")"
+# ADOPT-14: surface career discovery stats in the Discord summary.
+CAREER_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE career_url IS NOT NULL AND career_url!=\"\"').fetchone()[0])")"
+ATS_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE ats_type IS NOT NULL AND ats_type!=\"\"').fetchone()[0])")"
 
 SUMMARY="⚓ Daily batch done at $(date '+%H:%M %Z').
 Jobs in DB: ${TOTAL_COUNT}
 Top-tier (score≥150): ${TOP_TIER_COUNT}
 Standard (80–149): ${STANDARD_COUNT}
+Career URLs discovered: ${CAREER_COUNT} (${ATS_COUNT} with ATS detected)
 Dashboard: http://127.0.0.1:8080"
 
 discord_send "$SUMMARY" \

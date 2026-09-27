@@ -136,6 +136,8 @@ A ready-to-go `~/Library/LaunchAgents/com.boldandigital.jobpipeline.plist` is be
 | Top scorers right now? | `sqlite3 data/jobs.db "SELECT title, company, score FROM jobs WHERE score >= 100 ORDER BY score DESC LIMIT 10;"` |
 | Full batch preview | `bash scripts/lars-daily-run.sh --dry-run` |
 | Re-send today's batch ZIP via Discord | `bash scripts/lars-daily-run.sh` (re-runs full pipeline, idempotent on DB) |
+| Scrape a single source only | `bash scripts/lars-daily-run.sh --source xing --skip-scrape` (use with caution — full Discord flow still runs) |
+| Scrape with no source change | `bash scripts/lars-daily-run.sh --skip-scrape` (re-score + batch existing DB) |
 
 ---
 
@@ -146,10 +148,81 @@ A ready-to-go `~/Library/LaunchAgents/com.boldandigital.jobpipeline.plist` is be
 | Pause for one day | comment out the cron line in `crontab -e` |
 | Pause indefinitely | `crontab -e` → delete the `ADOPT-5` line |
 | Nuclear: kill cron entirely | `crontab -r` (removes ALL your cron jobs — be sure) |
-| Re-enable after pause | uncomment the line in `crontab -e`, save |
+| Re-enable after pause | uncomment the line in your crontab, save, exit |
 | Disable Discord only (cron keeps running) | `discord: enabled: false` in `config/delivery.yaml`, then touch `./logs/.muted` |
 
 Logs keep writing when paused — that's intentional (you want a paper trail).
+
+---
+
+## 4b. SCRAPING — sources, flags, and DACH tuning (ADOPT-13)
+
+The daily pipeline now starts with a **scrape step** before scoring. Default sources:
+
+- `stepstone` — the German job-board leader, biggest surface
+- `xing` — the DACH-native professional network (see §4b.1 below)
+- `arbeitsagentur` — official Bundesagentur für Arbeit API, no scraping
+
+LinkedIn is intentionally NOT in the default — `jobspy` (the upstream Docker scraper) is not set up in this checkout. To opt back in, run `daily_pipeline.sh` (the dome317 Docker path) instead.
+
+### 4b.1 XING (the DACH-native 4th platform)
+
+XING is the German/Austrian/Swiss professional network — the original 4-platform scope was "LinkedIn + StepStone + XING + official career pages". XING is where mid-to-senior roles in DACH appear earliest, especially `Geschäftsführer`, `Founder`, and `Head of`-track listings that LinkedIn doesn't surface well in German.
+
+| Field | Value |
+|---|---|
+| Implementation | `src/scrapers/xing_scraper.py` (Patchright, headless Chromium) |
+| Public URL | `https://www.xing.com/jobs/search?keywords=...&location=...&page=N` |
+| Pagination | `?page=N` works from page 1, capped at 3 pages by the wrapper |
+| Anti-bot | DSGVO cookie banner (auto-dismissed), captcha (bail + warn), login-wall beyond ~5 pages |
+| Locale | `de-DE`, TZ `Europe/Berlin`, geo = Germany |
+| DB | Appends to `jobs` table with `source = 'xing'` |
+| Dedupe | Exact (UNIQUE title+company) + fuzzy (SequenceMatcher 0.85 against last 5,000) |
+
+**Queries (`config/lars.yaml → xing_queries`):**
+
+```yaml
+xing_queries:
+  - "founder digital"
+  - "cto startup"
+  - "head of digital"
+  - "managing director agency"
+  - "geschäftsführer digital"   # DE equivalent for higher recall
+xing_location: "Deutschland"      # DACH-heavy by default
+```
+
+Tune either list and the daily run picks it up next time `run_scrapers` runs.
+
+### 4b.2 Manual scrape flags
+
+```bash
+# Scrape XING only — single source
+bash scripts/lars-daily-run.sh --source xing
+
+# Scrape XING + Arbeitsagentur (skip StepStone today)
+bash scripts/lars-daily-run.sh --source xing,arbeitsagentur
+
+# Re-score + batch the existing DB without re-scraping
+bash scripts/lars-daily-run.sh --skip-scrape
+
+# Full reset to defaults: scrape all three, then score + batch + Discord
+bash scripts/lars-daily-run.sh
+```
+
+Each source failure is logged but does NOT halt the pipeline — if XING captcha-triggers, you'll still get the StepStone + Arbeitsagentur jobs in the batch. The next cron run will retry XING.
+
+### 4b.3 Inspect XING rows
+
+```bash
+# All XING rows in the DB
+sqlite3 data/jobs.db "SELECT title, company, location, url FROM jobs WHERE source='xing' ORDER BY id DESC LIMIT 20;"
+
+# Count by status
+sqlite3 data/jobs.db "SELECT status, COUNT(*) FROM jobs WHERE source='xing' GROUP BY status;"
+
+# Force a clean re-scrape (delete XING rows, then --source xing)
+sqlite3 data/jobs.db "DELETE FROM jobs WHERE source='xing';"
+```
 
 ---
 
