@@ -22,7 +22,9 @@ cat > "$CRON_FILE" <<CRONEOF
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin
 
-# Load environment
+# Load environment (ADOPT-8 — bot mode preferred, webhook fallback)
+# Set DISCORD_BOT_TOKEN + DISCORD_CHANNEL_ID (or DISCORD_HOME_CHANNEL) for bot mode.
+# Legacy DISCORD_WEBHOOK_URL still works. daily_pipeline.sh picks one automatically.
 DB_PATH=$INSTALL_DIR/data/jobs.db
 JOBSPY_DB_PATH=$INSTALL_DIR/data/jobspy.db
 

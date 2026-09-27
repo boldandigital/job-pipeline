@@ -1,17 +1,57 @@
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║  DAILY DELIVERY — Discord webhook config (Lars's Mac, ADOPT-7)         ║
+# ║  DAILY DELIVERY — Discord config (ADOPT-8)                            ║
 # ║                                                                      ║
-# ║  Picked up by scripts/lars-daily-run.sh → sends summary + ZIP via     ║
-# ║  Discord webhooks. Loaded by the wrapper, NOT by batch_pipeline.py.   ║
+# ║  Picked up by scripts/lars-daily-run.sh → sends summary + ZIP to     ║
+# ║  Discord via the SAME Hermes bot that powers the assistant. Loaded   ║
+# ║  by the wrapper, NOT by batch_pipeline.py.                            ║
 # ║                                                                      ║
-# ║  Secrets are NOT here — DISCORD_WEBHOOK_URL lives in `.env`           ║
-# ║  (gitignored). This file only carries framing + limits.               ║
+# ║  Secrets are NOT here — DISCORD_BOT_TOKEN + DISCORD_CHANNEL_ID live  ║
+# ║  in `~/.hermes/.env` (gitignored). This file only carries framing +   ║
+# ║  limits + a mode selector. See docs/SECRETS.md for the cross-project  ║
+# ║  secret-sharing pattern.                                              ║
+# ║                                                                      ║
+# ║  Mode resolution (set automatically by lars-daily-run.sh):           ║
+# ║    • bot     — DISCORD_BOT_TOKEN + DISCORD_CHANNEL_ID present        ║
+# ║    • webhook — only DISCORD_WEBHOOK_URL present (legacy fallback)     ║
+# ║    • both    — bot wins, webhook ignored                              ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 
 discord:
   enabled: true                              # flip to false to mute without uninstalling cron
 
+  # ─────────────────────────────────────────────────────────────────
+  # Delivery mode — env-gated by the wrapper (don't change this by hand)
+  #   bot     → POST /channels/{id}/messages with Bot token (default, ADOPT-8)
+  #   webhook → POST {webhook_url} (ADOPT-7 fallback)
+  # The wrapper inspects env vars and picks one; this value is informational.
+  # ─────────────────────────────────────────────────────────────────
+  mode: bot
+
+  # ─────────────────────────────────────────────────────────────────
+  # Bot-mode credentials (READ-ONLY references — secrets live in ~/.hermes/.env)
+  # lars-daily-run.sh will:
+  #   1. Source job-pipeline/.env first
+  #   2. Fall back to ~/.hermes/.env for any missing DISCORD_* var
+  #   3. Default DISCORD_CHANNEL_ID to DISCORD_HOME_CHANNEL if blank
+  # ─────────────────────────────────────────────────────────────────
+  bot:
+    token_env: DISCORD_BOT_TOKEN             # OAuth Bot token (NEVER commit the value)
+    channel_id_env: DISCORD_CHANNEL_ID       # numeric snowflake; defaults to DISCORD_HOME_CHANNEL
+    api_base: https://discord.com/api/v10    # Discord REST API v10
+
+  # ─────────────────────────────────────────────────────────────────
+  # Webhook-mode fallback (ADOPT-7 — kept for the dome317 Docker path)
+  # Used only when no bot creds are present. Disable by clearing the env var.
+  # ─────────────────────────────────────────────────────────────────
+  webhook:
+    url_env: DISCORD_WEBHOOK_URL             # webhook URL (NEVER commit the value)
+
+  # Display-name override (both modes honor this)
+  username_env: DISCORD_USERNAME             # optional
+
+  # ─────────────────────────────────────────────────────────────────
   # Daily summary message framing
+  # ─────────────────────────────────────────────────────────────────
   message:
     greeting: "Ahoy ⚓ Daily batch is in."
     include_dashboard_link: true
@@ -22,20 +62,30 @@ discord:
     # sidebar accent. 0x1ABC9C is a teal that pairs nicely with the ⚓ vibe.
     embed_color: null
 
-  # Document delivery
+  # ─────────────────────────────────────────────────────────────────
+  # Document delivery (batch ZIP attachment)
+  # NOTE: Discord bot API caps files at 25 MB; webhooks cap at 8 MB / 50 MB
+  # depending on Nitro boosts. Bot is the default — keep headroom under 24.
+  # ─────────────────────────────────────────────────────────────────
   documents:
     attach_zip: true
-    max_zip_size_mb: 24                       # Discord webhook cap = 25MB; keep headroom
+    max_zip_size_mb: 24                       # Discord cap = 25 MB; keep headroom
     min_score_to_include: 20                  # skip batched jobs below this score
     max_jobs_per_batch: 50
+    # If a batch ever nears the 25 MB cap, split the ZIP into chunks OR
+    # upload to S3 and send the link instead. See docs/DAILY-RUN.md §3.
 
+  # ─────────────────────────────────────────────────────────────────
   # Schedule metadata (informational — actual schedule lives in crontab)
+  # ─────────────────────────────────────────────────────────────────
   schedule:
     local_time: "09:00"
     timezone: "Europe/Brussels"
     note: "Cron uses local time on macOS, so 09:00 = 09:00 Brussels."
 
+  # ─────────────────────────────────────────────────────────────────
   # Log retention — cron is silent, so wrapper handles its own rotation
+  # ─────────────────────────────────────────────────────────────────
   logs:
     dir: "./logs"
     daily_keep: 14                            # days of daily logs / batch logs to keep
