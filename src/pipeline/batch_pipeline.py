@@ -41,6 +41,9 @@ CL_GENERATOR = os.getenv("CL_GENERATOR", "python -m src.generation.cover_letter_
 ENV_FILE = os.getenv("ENV_FILE", "./.env")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+# When 1, cover letters use our ATS-safe templates + 4-track WHY-YOU YAML
+# (port ADOPT-3). When 0, fall back to dome317's in-Python cover_letter_generator.py.
+USE_ATS_TEMPLATES = os.getenv("USE_ATS_TEMPLATES", "1") == "1"
 
 # CV variant mapping: keywords -> variant tagline
 CV_VARIANTS = {
@@ -154,6 +157,75 @@ def detect_language(title, company, location=""):
     return "en"
 
 
+def _personal_from_env() -> dict:
+    """Read CANDIDATE_* env vars into a personal dict for templates."""
+    return {
+        "name": os.getenv("CANDIDATE_NAME", "Your Name"),
+        "title": os.getenv("CANDIDATE_TITLE", ""),
+        "location": os.getenv("CANDIDATE_LOCATION", "Berlin"),
+        "email": os.getenv("CANDIDATE_EMAIL", "your.email@example.com"),
+        "phone": os.getenv("CANDIDATE_PHONE", "+49 123 456789"),
+        "linkedin": os.getenv("CANDIDATE_LINKEDIN", ""),
+    }
+
+
+def _generate_cover_letter_ats(job, cl_path, variant, lang, variant_tagline):
+    """Render ATS-safe cover letter (HTML -> PDF via Patchright)."""
+    try:
+        from src.generation.ats_templates import build_cover_letter_for_job
+        from patchright.sync_api import sync_playwright
+        import tempfile
+    except ImportError as e:
+        log.error("  ATS templates not importable, skipping CL: %s", e)
+        return None
+
+    personal = _personal_from_env()
+    if lang == "de":
+        opening = (
+            f"Ihre Ausschreibung für die Position {job.get('title', '')} bei "
+            f"{job.get('company', '')} hat mein großes Interesse geweckt."
+        )
+        me_paragraph = (
+            "Als Seriengründer und CTO bringe ich 4+ Jahre operative Erfahrung "
+            "in der Skalierung digitaler Agenturen und Hosting-Plattformen mit."
+        )
+        close = "Ich freue mich auf ein persönliches Gespräch."
+    else:
+        opening = (
+            f"Your opening for the {job.get('title', '')} role at "
+            f"{job.get('company', '')} caught my attention immediately."
+        )
+        me_paragraph = (
+            "As a repeat founder and CTO, I bring 4+ years of operational "
+            "experience scaling digital agencies and hosting platforms."
+        )
+        close = "I'd welcome a 30-minute conversation to explore the fit."
+
+    html = build_cover_letter_for_job(
+        job=job, language=lang, variant=variant,
+        personal=personal,
+        opening=opening, me_paragraph=me_paragraph, close=close,
+    )
+
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8") as f:
+        f.write(html)
+        tmp = f.name
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True, args=["--no-sandbox"])
+            page = browser.new_page()
+            page.goto(f"file://{tmp}", wait_until="networkidle")
+            page.pdf(path=cl_path, format="A4", print_background=True)
+            browser.close()
+        log.info("  CL generated (ATS-safe): %s", cl_path)
+        return cl_path
+    except Exception as e:
+        log.error("  ATS CL generation failed: %s", e)
+        return None
+    finally:
+        os.unlink(tmp)
+
+
 def generate_documents(job, output_dir):
     """Generate CV and cover letter for a job."""
     variant = detect_variant(job.get("title", ""), job.get("description", ""))
@@ -176,7 +248,22 @@ def generate_documents(job, output_dir):
         log.error("  CV generation failed: %s", e)
         cv_path = None
 
-    return {"cv_path": cv_path, "cl_path": None, "variant": variant, "language": lang}
+    # Generate cover letter — opt-in ATS path (USE_ATS_TEMPLATES=1) uses our
+    # templates + WHY-YOU YAML; otherwise fall back to dome317's subprocess CL.
+    cl_result = None
+    if USE_ATS_TEMPLATES:
+        cl_result = _generate_cover_letter_ats(job, cl_path, variant, lang, tagline)
+    if not cl_result:
+        cl_cmd = f'{CL_GENERATOR} --company "{job.get("company", "")}" --role "{job.get("title", "")}" --language {lang} --output "{cl_path}"'
+        try:
+            subprocess.run(cl_cmd, shell=True, timeout=60, check=True, capture_output=True)
+            log.info("  CL generated (dome317 fallback): %s", cl_path)
+            cl_result = cl_path
+        except Exception as e:
+            log.error("  CL generation failed: %s", e)
+            cl_result = None
+
+    return {"cv_path": cv_path, "cl_path": cl_result, "variant": variant, "language": lang}
 
 
 def main():

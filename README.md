@@ -204,7 +204,8 @@ job-search-pipeline/
 │   │   └── career_discovery.py    # 3-layer URL discovery + ATS detection
 │   ├── generation/            # Document generation
 │   │   ├── cv_generator.py        # HTML→PDF CV (4 variants)
-│   │   └── cover_letter_generator.py
+│   │   ├── cover_letter_generator.py   # dome317 fallback CL
+│   │   └── ats_templates.py       # ATS-safe HTML templates + 4-track WHY-YOU YAML (ADOPT-3)
 │   └── pipeline/              # Orchestration + UI
 │       ├── batch_pipeline.py      # Top N → CV+CL → ZIP → Telegram
 │       └── dashboard.py          # Web UI for job review

@@ -1,0 +1,89 @@
+# Reusable "Why-You" Paragraph Templates
+# Source-of-truth paragraphs picked by track (founder_cto / agency_strategy /
+# hosting_infra / generic). Bilingual EN/DE, quantified achievements, ~80-100 words.
+# Used by src/generation/why_you_loader.py + batch_pipeline.py cover letter gen.
+# Mirrors ~/Documents/Projects/CV/templates/why-you-paragraphs.yaml (port ADOPT-3).
+
+founder_cto:
+  en: |
+    As a repeat founder myself, I know what it takes to turn a 0-to-1 idea into a
+    revenue-generating business — and the discipline required to keep it scaling
+    past the founder stage. I've done this twice in parallel with Bold and Digital
+    (4+ years, 20+ international clients) and HostSalt (3+ years, 500+ sites on
+    the platform, 99.9% uptime). My edge is the combination of strategic
+    positioning, hands-on technical execution, and team building across both
+    product and agency contexts — the same blend your CTO needs to bring to
+    your team at this stage.
+  de: |
+    Als Seriengründer weiß ich, was es braucht, um eine Idee von 0 auf 1 zu
+    einem umsatzgenerierenden Geschäft zu entwickeln — und welche Disziplin
+    nötig ist, um über die Gründerphase hinaus zu skalieren. Ich habe das
+    parallel mit Bold and Digital (4+ Jahre, 20+ internationale Kunden) und
+    HostSalt (3+ Jahre, 500+ Sites auf der Plattform, 99,9 % Verfügbarkeit)
+    gemacht. Meine Stärke ist die Kombination aus strategischer
+    Positionierung, hands-on technischer Umsetzung und Teamaufbau in
+    Produkt- und Agentur-Kontexten — genau die Mischung, die ein CTO in
+    dieser Phase mitbringen muss.
+
+agency_strategy:
+  en: |
+    What sets me apart from a typical agency strategist is that I run a real
+    one — Bold and Digital — and have done so for 4+ years across 4 continents
+    and 20+ clients including LiteSpeed Technologies and QUIC.cloud. I bring
+    frameworks that actually work in the field (4Ps/4S positioning, NPS-driven
+    client management, Salesforce-led pipeline visibility) plus measurable
+    outcomes: 20-30% margin improvements across 15+ engagements, 100% on-time
+    delivery over 24 months, >95% client satisfaction. I can land in your team
+    and immediately translate that operating discipline into your strategy
+    roadmap.
+  de: |
+    Was mich vom typischen Agenturstrategen unterscheidet: Ich führe selbst
+    eine — Bold and Digital, seit 4+ Jahren, 4 Kontinente, 20+ Kunden
+    inklusive LiteSpeed Technologies und QUIC.cloud. Ich bringe Frameworks
+    mit, die in der Praxis funktionieren (4Ps/4S-Positionierung,
+    NPS-getriebenes Kundenmanagement, Salesforce-basierte Pipeline-Transparenz)
+    plus messbare Ergebnisse: 20-30 % Margenverbesserung in 15+ Projekten,
+    100 % termingerechte Lieferung über 24 Monate, >95 % Kundenzufriedenheit.
+    Ich kann in Ihrem Team sofort loslegen und diese operativen Stärken in
+    Ihre Strategie-Roadmap übersetzen.
+
+hosting_infra:
+  en: |
+    I run HostSalt, a performance-driven managed WordPress and WooCommerce
+    hosting platform with 500+ sites, 99.9% uptime, and a median LCP under 2.0
+    seconds. My edge is the rare combination of architecture-level expertise
+    (LiteSpeed, CDN, observability) and product-level judgment (Core Web Vitals,
+    customer onboarding, NPS at 60+). Across 200+ performance audits I've lifted
+    median LCP by 35-50% per audited site, and I've led 50+ zero-downtime
+    migrations for agency partners. I can plug into your infrastructure team
+    and immediately translate between the engineers shipping daily and the
+    customers expecting 24/7 reliability.
+  de: |
+    Ich führe HostSalt — eine leistungsorientierte Managed-Hosting-Plattform
+    für WordPress und WooCommerce mit 500+ Sites, 99,9 % Verfügbarkeit und
+    medianem LCP unter 2,0 Sekunden. Meine Stärke ist die seltene Kombination
+    aus Architektur-Expertise (LiteSpeed, CDN, Observability) und
+    Produkt-Denken (Core Web Vitals, Kunden-Onboarding, NPS 60+). In 200+
+    Performance-Audits habe ich den medianen LCP um 35-50 % pro Site
+    verbessert und 50+ Zero-Downtime-Migrationen für Agenturpartner geleitet.
+    Ich kann in Ihr Infrastrukturteam einsteigen und direkt zwischen den
+    Engineers, die täglich shippen, und den Kunden, die 24/7-Verfügbarkeit
+    erwarten, übersetzen.
+
+# Generic fallback when no track is specified
+generic:
+  en: |
+    Your team is operating at a level where the work directly maps to what
+    I've spent the last decade building — international digital agencies,
+    managed hosting infrastructure, and the strategic positioning that makes
+    both work. I bring both the strategic framework (4Ps/4S, NPS, Salesforce)
+    and the hands-on technical execution (cloud, hosting, performance) that
+    these roles demand. I'm confident I can land and immediately contribute.
+  de: |
+    Ihr Team arbeitet auf einem Niveau, das direkt zu dem passt, was ich in
+    den letzten zehn Jahren aufgebaut habe — internationale Digitalagenturen,
+    Managed-Hosting-Infrastruktur und die strategische Positionierung, die
+    beides trägt. Ich bringe sowohl den strategischen Rahmen (4Ps/4S, NPS,
+    Salesforce) als auch die hands-on technische Umsetzung (Cloud, Hosting,
+    Performance) mit, die solche Rollen verlangen. Ich bin zuversichtlich,
+    dass ich sofort produktiv beitragen kann.

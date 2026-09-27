@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<!--
+  Anschreiben Template (DIN 5008 + YOU-ME-WE-Close structure)
+  Renderer: scripts/render_anschreiben.py (CV master repo) or build_cover_html()
+            in src/generation/cover_letter_generator.py fills placeholders.
+  Available tokens: lang, name, location, email, phone, linkedin,
+                    date, subject_line, salutation,
+                    opening, me_paragraph, why_you_paragraph, close,
+                    signature, recipient_block, position_title, company.
+  Salutation substitution uses {{contact_name_last}} (last name only,
+  after "Frau"/"Herr" prefix); {{contact_name}} is also accepted.
+  Ported from ~/Documents/Projects/CV/templates/anschreiben.html (ADOPT-3).
+-->
+<html lang="{{lang}}">
+<head>
+  <meta charset="UTF-8">
+  <title>Anschreiben — {{position_title}} — {{company}}</title>
+  <style>
+    /* Letter format following DIN 5008 (A4, 2.5cm margins) */
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.5;
+      color: #111;
+      max-width: 720px;
+      margin: 25mm auto;
+      padding: 0 25mm;
+      background: #fff;
+    }
+    .sender {
+      font-size: 9pt;
+      color: #555;
+      margin-bottom: 24mm;     /* DIN 5008: ~27mm sender-to-recipient gap */
+      border-bottom: 0.5pt solid #999;
+      padding-bottom: 2mm;
+    }
+    .recipient {
+      font-size: 10.5pt;
+      line-height: 1.35;
+      margin-bottom: 8mm;
+    }
+    .date {
+      text-align: right;
+      margin-bottom: 6mm;
+      font-size: 10.5pt;
+    }
+    .subject {
+      font-weight: 600;
+      font-size: 12pt;
+      margin-bottom: 6mm;
+    }
+    .salutation { margin-bottom: 4mm; }
+    p { margin: 0 0 4mm; }
+    .signature {
+      margin-top: 10mm;
+    }
+    .signature .name { font-weight: 600; }
+    @page { size: A4; margin: 25mm; }
+    @media print { body { margin: 0; padding: 0 25mm; max-width: 100%; } }
+  </style>
+</head>
+<body>
+
+<div class="sender">
+  <strong>{{name}}</strong><br>
+  {{location}}<br>
+  {{email}} · {{phone}} · {{linkedin}}
+</div>
+
+<div class="recipient">
+  {{recipient_block}}
+</div>
+
+<div class="date">{{date}}</div>
+
+<div class="subject">
+  {{subject_line}}  <!-- "Bewerbung als {{position_title}}" / "Application for {{position_title}}" -->
+</div>
+
+<p class="salutation">{{salutation}}</p>
+
+<p>{{opening}}</p>
+
+<p>{{me_paragraph}}</p>
+
+<p>{{why_you_paragraph}}</p>
+
+<p>{{close}}</p>
+
+<div class="signature">
+  {{signature}}<br><br>
+  <span class="name">{{name}}</span>
+</div>
+
+</body>
+</html>

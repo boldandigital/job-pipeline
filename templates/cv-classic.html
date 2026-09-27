@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<!--
+  CV Template: cv-classic.html
+  Purpose: ATS-safe, single-column, semantic mirroring ready.
+  Renderer: scripts/render_cv.py (CV master repo) or build_cv_html() in
+            src/generation/cv_generator.py fills placeholders from a data dict.
+  Available tokens: name, title, location, email, phone, linkedin,
+                   summary, summary_heading, skills_heading, top_skills_li,
+                   experience_heading, experience_blocks, education_heading,
+                   education_blocks, languages_heading, languages_li,
+                   certifications_section, publications_section, position_title, lang.
+  RULES (ATS-safe):
+    - Single column. No tables, no text boxes, no icons.
+    - Standard headings (Summary, Experience, Skills, Education).
+    - Body fonts only (system-ui / Helvetica / Arial fallback).
+    - Contact details in body, NOT in header/footer.
+    - All achievements quantified where possible.
+  Ported from ~/Documents/Projects/CV/templates/cv-classic.html (ADOPT-3).
+-->
+<html lang="{{lang}}">
+<head>
+  <meta charset="UTF-8">
+  <title>{{name}} — {{position_title}}</title>
+  <meta name="description" content="{{name}} — {{summary_short}}">
+  <style>
+    /* ATS-safe typography. No tables, no floats, no icons. */
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.45;
+      color: #111;
+      max-width: 780px;
+      margin: 28px auto;
+      padding: 0 36px;
+      background: #fff;
+    }
+    h1 { font-size: 22pt; margin: 0 0 4px; letter-spacing: -0.01em; }
+    h2 {
+      font-size: 11pt;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 22px 0 8px;
+      padding-bottom: 4px;
+      border-bottom: 1.5px solid #111;
+    }
+    h3 { font-size: 12pt; margin: 14px 0 2px; font-weight: 600; }
+    .role-meta { color: #444; font-size: 10pt; margin: 0 0 6px; }
+    .contact { font-size: 10pt; color: #333; margin: 4px 0 0; }
+    .contact span { display: inline; }
+    .contact span:empty { display: none; }
+    .contact span + span::before { content: " · "; color: #888; margin: 0 4px; }
+    .summary { margin: 12px 0 0; }
+    ul { margin: 6px 0 10px; padding-left: 20px; }
+    li { margin-bottom: 3px; }
+    .skills { font-size: 10.5pt; }
+    .skills li { margin-bottom: 1px; }
+    .muted { color: #555; }
+    @page { margin: 18mm; }
+    @media print {
+      body { margin: 0; padding: 0; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER (in body, NOT in <header>) -->
+<h1>{{name}}</h1>
+<!-- Contact spans; empty {{phone}} is filtered by .contact span:empty { display: none } -->
+<div class="contact">
+  <span>{{title}}</span>
+  <span>{{location}}</span>
+  <span>{{email}}</span>
+  <span>{{phone}}</span>
+  <span>{{linkedin}}</span>
+</div>
+
+<!-- SUMMARY -->
+<h2>{{summary_heading}}</h2>
+<p class="summary">{{summary}}</p>
+
+<!-- TOP SKILLS -->
+<h2>{{skills_heading}}</h2>
+<ul class="skills">
+  {{top_skills_li}}
+</ul>
+
+<!-- EXPERIENCE -->
+<h2>{{experience_heading}}</h2>
+{{experience_blocks}}
+
+<!-- EDUCATION -->
+<h2>{{education_heading}}</h2>
+{{education_blocks}}
+
+<!-- LANGUAGES -->
+<h2>{{languages_heading}}</h2>
+<ul class="skills">
+  {{languages_li}}
+</ul>
+
+<!-- CERTIFICATIONS -->
+{{certifications_section}}
+
+<!-- PUBLICATIONS -->
+{{publications_section}}
+
+</body>
+</html>
