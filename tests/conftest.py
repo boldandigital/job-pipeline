@@ -76,6 +76,10 @@ apply_ashby = _load_pkg_member(
     "src.apply.ats_adapters", "ashby",
     str(_ADAPTERS_PKG_PATH / "ashby.py"),
 )
+apply_generic = _load_pkg_member(
+    "src.apply.ats_adapters", "generic",
+    str(_ADAPTERS_PKG_PATH / "generic.py"),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -194,20 +198,42 @@ class FakePage:
 
     async def query_all(self, selector: str) -> List[Dict[str, str]]:
         self.log.query_all.append(selector)
-        # Greenhouse's question selector is `textarea[id^="question_"]`. Match
-        # by ID prefix when seeded.
-        prefix = ""
-        if "[id^=" in selector:
-            try:
-                prefix = selector.split('"')[1]
-            except IndexError:
-                prefix = ""
-        if prefix:
-            return [
-                {"id": k, "label": v.get("label", "")}
-                for k, v in self.dom.items() if k.startswith(prefix)
-            ]
-        return []
+        # Generic query: any comma-separated CSS selector list. Return
+        # one synthetic entry per DOM key that matches at least one clause.
+        clauses = [c.strip() for c in selector.split(",") if c.strip()]
+        matches: List[Dict[str, str]] = []
+        seen: set = set()
+        for clause in clauses:
+            # CSS prefix selector e.g. textarea[id^="question_"]
+            if "[id^=" in clause:
+                try:
+                    prefix = clause.split('"')[1]
+                except IndexError:
+                    prefix = ""
+                for k, v in self.dom.items():
+                    if k.startswith(prefix) and k not in seen:
+                        matches.append({"id": k, "label": v.get("label", "")})
+                        seen.add(k)
+                continue
+            # CSS substring selector e.g. input[*="x"]
+            if "[*=" in clause:
+                try:
+                    needle = clause.split('"')[1]
+                except IndexError:
+                    needle = ""
+                for k, v in self.dom.items():
+                    if needle and needle in k and k not in seen:
+                        matches.append({"id": k, "label": v.get("label", "")})
+                        seen.add(k)
+                continue
+            # `tag[type="x"]` exact match
+            if clause in self.dom:
+                matches.append({
+                    "id": clause,
+                    "label": self.dom[clause].get("label", ""),
+                })
+                seen.add(clause)
+        return matches
 
     async def wait_for_selector(self, selector: str, timeout_ms: int = 10_000) -> None:
         self.log.wait_for_selector.append(selector)
