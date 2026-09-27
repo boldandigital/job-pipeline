@@ -1,122 +1,245 @@
 #!/usr/bin/env bash
 # ╔═══════════════════════════════════════════════════════════════════════╗
-# ║  JOB SEARCH PIPELINE — VPS SETUP SCRIPT                             ║
-# ║  Ubuntu 22.04+ · Idempotent · Run as root                           ║
-# ║  Run: chmod +x setup.sh && sudo ./setup.sh                          ║
+# ║  JOB SEARCH PIPELINE — SETUP SCRIPT                                  ║
+# ║  Portable: Ubuntu 22.04+ AND macOS (Darwin)                          ║
+# ║  Idempotent · Run as root on Linux, normal user on macOS             ║
+# ║  Run: bash scripts/setup.sh                   (auto-detects OS)      ║
+# ║       sudo bash scripts/setup.sh              (Linux: full system)    ║
+# ║                                                                       ║
+# ║  History:                                                             ║
+# ║    Original:  Ubuntu-only (apt, ufw, docker, swap)                   ║
+# ║    ADOPT-9:   Split into OS branches. macOS skips Docker/ufw/swap.   ║
+# ║               Both branches: create data/ + logs/, run init_db.       ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
 set -euo pipefail
 
 # ============================================================
-# COLORS & LOGGING
+# Paths & colors
 # ============================================================
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+INSTALL_DIR="${INSTALL_DIR:-$PROJECT_DIR}"
+LOG_DIR="$INSTALL_DIR/logs"
+mkdir -p "$LOG_DIR"
+LOGFILE="$LOG_DIR/setup.log"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
-LOGFILE="/var/log/job-pipeline-setup.log"
 
 log()  { echo -e "${GREEN}[OK]${NC} $1" | tee -a "$LOGFILE"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1" | tee -a "$LOGFILE"; }
 err()  { echo -e "${RED}[ERR]${NC} $1" | tee -a "$LOGFILE"; }
 info() { echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOGFILE"; }
+head() { echo -e "${CYAN}── $1 ──${NC}" | tee -a "$LOGFILE"; }
 
 trap 'err "Script failed at line $LINENO. See $LOGFILE"' ERR
 
 echo "" | tee -a "$LOGFILE"
 info "=== Job Search Pipeline Setup started $(date) ==="
+info "Project: $INSTALL_DIR"
+info "Log:     $LOGFILE"
 
 # ============================================================
-# CHECK: Root?
+# OS detect — branch into Linux (full VPS) or macOS (dev only)
 # ============================================================
-if [[ $EUID -ne 0 ]]; then
-  err "This script must be run as root: sudo ./setup.sh"
+OS="$(uname -s)"
+case "$OS" in
+  Linux)
+    OS_FLAVOR="linux"
+    IS_ROOT=0
+    [[ $EUID -eq 0 ]] && IS_ROOT=1
+    if [[ $IS_ROOT -ne 1 ]]; then
+      err "Linux setup must be run as root: sudo bash scripts/setup.sh"
+      exit 1
+    fi
+    ;;
+  Darwin)
+    OS_FLAVOR="macos"
+    ;;
+  *)
+    err "Unsupported OS: $OS (this script handles Linux and Darwin)."
+    exit 1
+    ;;
+esac
+
+info "Detected OS: $OS_FLAVOR"
+
+# ============================================================
+# PHASE 1: System dependencies + DB schema
+# Both branches converge here (Linux: via apt / macOS: assume present)
+# ============================================================
+head "Phase 1: System dependencies + project layout"
+
+if [[ "$OS_FLAVOR" == "linux" ]]; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq 2>>"$LOGFILE"
+  apt-get upgrade -y -qq 2>>"$LOGFILE"
+  apt-get install -y -qq \
+    curl wget git unzip jq sqlite3 \
+    python3 python3-pip python3-venv \
+    ca-certificates gnupg lsb-release \
+    htop tmux \
+    2>>"$LOGFILE"
+  log "APT system packages installed"
+else
+  # macOS: assume brew + python3 already on PATH. Quick checks, no install.
+  for cmd in python3 sqlite3 git curl; do
+    if ! command -v "$cmd" &>/dev/null; then
+      warn "$cmd not on PATH — install via 'brew install <pkg>' (Homebrew) or Xcode CLT, then re-run."
+    else
+      _p=$(command -v "$cmd")
+      log "$cmd available: $_p"
+    fi
+  done
+fi
+
+# Project-local directories (idempotent — always safe)
+mkdir -p "$INSTALL_DIR"/{data,logs,config,batches,screenshots}
+log "Project directories ready at $INSTALL_DIR"
+
+# ============================================================
+# PHASE 2: Python dependencies (both OS)
+# ============================================================
+head "Phase 2: Python dependencies"
+
+# pyyaml for score_jobs; patchright for browser scraper. requests for HTTP.
+PY_DEPS=(requests pyyaml)
+if [[ "$OS_FLAVOR" == "macos" ]]; then
+  # patchright only needed for the headless scraper — skip if user hasn't
+  # asked. They can run `python3 -m patchright install chromium` later.
+  :
+else
+  # Linux (the original VPS path) installs patchright with chromium.
+  pip3 install --break-system-packages "${PY_DEPS[@]}" patchright 2>>"$LOGFILE" || \
+    warn "pip3 install failed — re-run after fixing the python env."
+  python3 -m patchright install --with-deps chromium 2>>"$LOGFILE" || \
+    warn "patchright chromium install failed — non-fatal; needed only for stepstone_scraper."
+fi
+log "Python core deps installed (${PY_DEPS[*]})"
+
+# ============================================================
+# PHASE 3: SQLite schema (canonical)
+# ADOPT-9: src/db/__init__.py:init_db() is the single source of truth.
+# ============================================================
+head "Phase 3: SQLite schema"
+
+DB_PATH="$INSTALL_DIR/data/jobs.db"
+echo "$DB_PATH" >> "$LOGFILE"
+
+# Run init_db via Python — creates table + all indexes in one shot.
+init_out="$(python3 - <<PY 2>>"$LOGFILE"
+import sys
+sys.path.insert(0, "$INSTALL_DIR")
+from src.db import init_db, ensure_data_dirs
+ensure_data_dirs("$INSTALL_DIR")
+conn = init_db("$DB_PATH")
+cols = conn.execute("PRAGMA table_info(jobs)").fetchall()
+print(f"jobs table ready: {len(cols)} columns")
+conn.close()
+PY
+)" || {
+  err "init_db failed — see $LOGFILE"
   exit 1
+}
+log "$init_out"
+
+# Idempotent migration for DBs created BEFORE ADOPT-9. ADOPT-6 added
+# career_url + description at runtime; ADOPT-9 promoted them into the
+# canonical schema. Existing DBs still get them via ALTER TABLE.
+if python3 "$INSTALL_DIR/scripts/migrate_schema_add_career_description.py" --db "$DB_PATH" 2>>"$LOGFILE"; then
+  log "Schema migration applied (additive, idempotent)"
+else
+  warn "Schema migration reported an issue (non-fatal — schema.sql already covers it)"
 fi
 
 # ============================================================
-# PHASE 1: System Updates + Dependencies
+# PHASE 4: OS-specific extras — Docker / Swap / Firewall / Cron (Linux only)
 # ============================================================
-info "Phase 1: System Updates + Dependencies"
+if [[ "$OS_FLAVOR" == "linux" ]]; then
+  head "Phase 4 (Linux): Docker + Swap + Firewall + Cron"
 
-export DEBIAN_FRONTEND=noninteractive
-
-apt-get update -qq 2>>"$LOGFILE"
-apt-get upgrade -y -qq 2>>"$LOGFILE"
-apt-get install -y -qq \
-  curl wget git unzip jq sqlite3 \
-  python3 python3-pip python3-venv \
-  ca-certificates gnupg lsb-release \
-  htop tmux \
-  2>>"$LOGFILE"
-log "System packages installed"
-
-# ============================================================
-# PHASE 2: Docker
-# ============================================================
-info "Phase 2: Docker"
-
-if command -v docker &>/dev/null; then
-  log "Docker already installed: $(docker --version)"
-else
-  curl -fsSL https://get.docker.com | sh 2>>"$LOGFILE"
-  log "Docker installed: $(docker --version)"
-fi
-
-if docker compose version &>/dev/null; then
-  log "Docker Compose available: $(docker compose version --short)"
-else
-  apt-get install -y docker-compose-plugin 2>>"$LOGFILE"
-fi
-
-systemctl enable docker 2>>"$LOGFILE"
-systemctl start docker 2>>"$LOGFILE"
-log "Docker service running"
-
-# ============================================================
-# PHASE 3: Python Dependencies
-# ============================================================
-info "Phase 3: Python Dependencies"
-
-pip3 install --break-system-packages requests patchright pyyaml 2>>"$LOGFILE"
-python3 -m patchright install --with-deps chromium 2>>"$LOGFILE" || true
-log "Python dependencies installed"
-
-# ============================================================
-# PHASE 4: Swap Space (important for 4-8GB RAM VPS)
-# ============================================================
-info "Phase 4: Swap Space"
-
-if swapon --show | grep -q /swapfile; then
-  log "Swap already active"
-else
-  if [[ ! -f /swapfile ]]; then
-    fallocate -l 2G /swapfile
-    chmod 600 /swapfile
-    mkswap /swapfile 2>>"$LOGFILE"
+  # Docker
+  if command -v docker &>/dev/null; then
+    log "Docker already installed: $(docker --version)"
+  else
+    curl -fsSL https://get.docker.com | sh 2>>"$LOGFILE"
+    log "Docker installed: $(docker --version)"
   fi
-  swapon /swapfile 2>>"$LOGFILE"
-  if ! grep -q '/swapfile' /etc/fstab; then
-    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  if docker compose version &>/dev/null; then
+    log "Docker Compose available: $(docker compose version --short)"
+  else
+    apt-get install -y docker-compose-plugin 2>>"$LOGFILE" || true
   fi
-  sysctl vm.swappiness=10 2>>"$LOGFILE"
-  log "2GB Swap configured"
+  systemctl enable docker 2>>"$LOGFILE" || true
+  systemctl start docker 2>>"$LOGFILE" || true
+  log "Docker service running"
+
+  # Swap (helps 4-8GB VPS)
+  if swapon --show | grep -q /swapfile; then
+    log "Swap already active"
+  else
+    if [[ ! -f /swapfile ]]; then
+      fallocate -l 2G /swapfile
+      chmod 600 /swapfile
+      mkswap /swapfile 2>>"$LOGFILE"
+    fi
+    swapon /swapfile 2>>"$LOGFILE"
+    if ! grep -q '/swapfile' /etc/fstab; then
+      echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    fi
+    sysctl vm.swappiness=10 2>>"$LOGFILE" || true
+    log "2GB Swap configured"
+  fi
+
+  # UFW
+  if command -v ufw &>/dev/null; then
+    ufw default deny incoming 2>>"$LOGFILE" || true
+    ufw default allow outgoing 2>>"$LOGFILE" || true
+    ufw allow ssh 2>>"$LOGFILE" || true
+    ufw allow 8080/tcp comment "Dashboard" 2>>"$LOGFILE" || true
+    ufw --force enable 2>>"$LOGFILE" || true
+    log "UFW configured (SSH + Dashboard)"
+  else
+    warn "ufw not installed — skipping firewall config (install via apt if needed)"
+  fi
+
+  # Cron — schedule daily_pipeline + stepstone_pipeline
+  CRON_FILE="/tmp/job-pipeline-cron-$$"
+  cat > "$CRON_FILE" <<CRONEOF
+# Job Search Pipeline — Cron Schedule (all times UTC)
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+DB_PATH=$INSTALL_DIR/data/jobs.db
+JOBSPY_DB_PATH=$INSTALL_DIR/data/jobspy.db
+
+# Daily job search (Indeed + LinkedIn via Docker + Arbeitsagentur)
+0 2 * * * cd $INSTALL_DIR && bash scripts/daily_pipeline.sh >> $INSTALL_DIR/logs/daily.log 2>&1
+
+# StepStone browser scrape
+30 8 * * * cd $INSTALL_DIR && bash scripts/stepstone_pipeline.sh >> $INSTALL_DIR/logs/stepstone.log 2>&1
+CRONEOF
+
+  if crontab "$CRON_FILE" 2>>"$LOGFILE"; then
+    log "Cron jobs installed (daily + stepstone)"
+  else
+    warn "crontab install failed — set up cron manually with scripts/cron.snippet"
+  fi
+  rm -f "$CRON_FILE"
+
+else
+  head "Phase 4 (macOS): skipped"
+  info "Linux-only steps (Docker, swap, UFW, cron) are N/A on macOS."
+  info "macOS users schedule jobs via 'crontab -e' or a launchd plist — see scripts/cron.snippet."
 fi
 
 # ============================================================
-# PHASE 5: Directory Structure
+# PHASE 5: .env template (both OS — idempotent)
 # ============================================================
-info "Phase 5: Directory Structure"
-
-INSTALL_DIR="${INSTALL_DIR:-/opt/job-pipeline}"
-
-mkdir -p "$INSTALL_DIR"/{data,config,logs,batches,screenshots}
-log "Directories created at $INSTALL_DIR"
-
-# ============================================================
-# PHASE 6: Environment File (template)
-# ============================================================
-info "Phase 6: Environment Variables"
+head "Phase 5: .env template"
 
 ENV_FILE="$INSTALL_DIR/.env"
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -141,9 +264,14 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<your_id>/<your_token>
 # Proxy for scraping (optional, recommended for Indeed)
 PROXY_URL=http://user:pass@proxy-host:port
 
-# Database paths
-DB_PATH=/opt/job-pipeline/data/jobs.db
-JOBSPY_DB_PATH=/opt/job-pipeline/data/jobspy.db
+# Database paths (default: project-relative, ADOPT-9)
+DB_PATH=./data/jobs.db
+JOBSPY_DB_PATH=./data/jobspy.db
+
+# Scoring config — ADOPT-9 wiring
+# Default points to Lars's tuned config so daily runs use his weights.
+# Override with SCORING_CONFIG=./config/example.yaml for stock behavior.
+SCORING_CONFIG=./config/lars.yaml
 
 # Candidate info (for CV/CL generation)
 CANDIDATE_NAME=Your Name
@@ -159,98 +287,11 @@ else
 fi
 
 # ============================================================
-# PHASE 7: SQLite Database
-# ============================================================
-info "Phase 7: SQLite Database"
-
-DB_PATH="$INSTALL_DIR/data/jobs.db"
-if [[ ! -f "$DB_PATH" ]]; then
-  sqlite3 "$DB_PATH" <<'SQLEOF'
-CREATE TABLE IF NOT EXISTS jobs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  company TEXT NOT NULL,
-  location TEXT,
-  url TEXT,
-  career_url TEXT,
-  source TEXT,
-  description TEXT,
-  search_query TEXT,
-  score INTEGER DEFAULT 0,
-  ats_type TEXT,
-  status TEXT DEFAULT 'new',
-  cv_path TEXT,
-  cover_letter_path TEXT,
-  applied_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(title, company)
-);
-
-CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
-CREATE INDEX IF NOT EXISTS idx_jobs_score ON jobs(score DESC);
-CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at);
-SQLEOF
-  log "SQLite database created: $DB_PATH"
-else
-  log "SQLite database already exists"
-fi
-
-# Schema migration: ensure jobs.career_url + jobs.description exist on older
-# DBs whose CREATE TABLE pre-dated ADOPT-6 (arbeitsagentur/stepstone scrapers
-# omitted them). Idempotent — safe on every setup re-run.
-if command -v python3 &>/dev/null; then
-  python3 "$INSTALL_DIR/scripts/migrate_schema_add_career_description.py" --db "$DB_PATH" 2>>"$LOGFILE" \
-    && log "Schema migration applied" \
-    || warn "Schema migration failed (non-fatal — see $LOGFILE)"
-else
-  warn "python3 not found — skipping schema migration; run scripts/migrate_schema_add_career_description.py manually"
-fi
-
-# ============================================================
-# PHASE 8: UFW Firewall
-# ============================================================
-info "Phase 8: Firewall"
-
-if command -v ufw &>/dev/null; then
-  ufw default deny incoming 2>>"$LOGFILE"
-  ufw default allow outgoing 2>>"$LOGFILE"
-  ufw allow ssh 2>>"$LOGFILE"
-  ufw allow 8080/tcp comment "Dashboard" 2>>"$LOGFILE"
-  ufw --force enable 2>>"$LOGFILE"
-  log "UFW Firewall configured (SSH + Dashboard)"
-fi
-
-# ============================================================
-# PHASE 9: Crontab
-# ============================================================
-info "Phase 9: Cron Jobs"
-
-CRON_FILE="/tmp/job-pipeline-cron"
-cat > "$CRON_FILE" <<CRONEOF
-# Job Search Pipeline — Cron Schedule (all times UTC)
-SHELL=/bin/bash
-PATH=/usr/local/bin:/usr/bin:/bin
-DB_PATH=$INSTALL_DIR/data/jobs.db
-JOBSPY_DB_PATH=$INSTALL_DIR/data/jobspy.db
-
-# Daily job search (Indeed + LinkedIn via Docker + Arbeitsagentur)
-0 2 * * * cd $INSTALL_DIR && bash scripts/daily_pipeline.sh >> $INSTALL_DIR/logs/daily.log 2>&1
-
-# StepStone browser scrape
-30 8 * * * cd $INSTALL_DIR && bash scripts/stepstone_pipeline.sh >> $INSTALL_DIR/logs/stepstone.log 2>&1
-CRONEOF
-
-crontab "$CRON_FILE"
-rm "$CRON_FILE"
-log "Cron jobs installed"
-
-# ============================================================
 # SUMMARY
 # ============================================================
 echo ""
 echo "╔═══════════════════════════════════════════════════════════════╗"
-echo "║                    SETUP COMPLETE                            ║"
+echo "║                    SETUP COMPLETE ($OS_FLAVOR)                          ║"
 echo "╠═══════════════════════════════════════════════════════════════╣"
 echo "║                                                               ║"
 echo "║  NEXT STEPS:                                                  ║"
@@ -258,19 +299,21 @@ echo "║                                                               ║"
 echo "║  1. Fill in secrets:                                          ║"
 echo "║     nano $INSTALL_DIR/.env                                    ║"
 echo "║                                                               ║"
-echo "║  2. Copy your config:                                        ║"
+echo "║  2. Copy your config (if not already):                        ║"
 echo "║     cp config/example.yaml $INSTALL_DIR/config/settings.yaml  ║"
+echo "║     # OR use the tuned config (already shipped as lars.yaml): ║"
+echo "║     # lars-daily-run.sh defaults to config/lars.yaml          ║"
 echo "║                                                               ║"
-echo "║  3. Copy candidate profile:                                  ║"
+echo "║  3. Copy candidate profile:                                   ║"
 echo "║     cp config/candidate_profile.example.md                    ║"
 echo "║        $INSTALL_DIR/config/candidate_profile.md               ║"
 echo "║                                                               ║"
-echo "║  4. Start the dashboard:                                     ║"
-echo "║     python3 -m src.pipeline.dashboard --db \$DB_PATH          ║"
+echo "║  4. Start the dashboard:                                      ║"
+echo "║     python3 -m src.pipeline.dashboard --db ./data/jobs.db     ║"
 echo "║                                                               ║"
-echo "║  5. Run first search manually:                               ║"
-echo "║     bash scripts/daily_pipeline.sh                            ║"
+echo "║  5. Run first search manually (macOS dev):                    ║"
+echo "║     bash scripts/lars-daily-run.sh --dry-run                  ║"
 echo "║                                                               ║"
 echo "╚═══════════════════════════════════════════════════════════════╝"
 
-log "Setup complete! $(date)"
+log "Setup complete! OS=$OS_FLAVOR  $(date)"

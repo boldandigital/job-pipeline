@@ -25,6 +25,9 @@
 
 set -euo pipefail
 
+log()   { printf '[%s] %s\n' "$(date '+%H:%M:%S %Z')" "$*"; }
+fail()  { log "[FAIL] $*" >&3; log "[FAIL] $*"; exit 1; }
+
 # ───────────────────────────────────────────────────────────────────────
 # Paths & flags
 # ───────────────────────────────────────────────────────────────────────
@@ -127,6 +130,53 @@ if [[ ! -d "$PROJECT_DIR/data" ]]; then mkdir -p "$PROJECT_DIR/data"; fi
 mkdir -p "$PROJECT_DIR/logs"
 
 # ───────────────────────────────────────────────────────────────────────
+# Ensure DB schema exists (ADOPT-9) — defensive idempotent init.
+# Calls src/db/__init__.py:init_db() which is a no-op if the table already
+# exists (CREATE TABLE IF NOT EXISTS). Safe to run on every startup; covers
+# the case where setup.sh wasn't run.
+# ───────────────────────────────────────────────────────────────────────
+log_needs_init() {
+  /usr/bin/env python3 - "$DB_PATH" <<'PY' 2>/dev/null
+import sqlite3, sys
+db = sys.argv[1]
+try:
+    c = sqlite3.connect(db)
+    c.execute("SELECT 1 FROM jobs LIMIT 1")
+    sys.exit(0)          # table exists
+except sqlite3.OperationalError:
+    sys.exit(1)          # need init
+PY
+}
+
+if [[ ! -n "${DB_PATH:-}" ]]; then
+  : "${DB_PATH:=$PROJECT_DIR/data/jobs.db}"
+fi
+
+if ! log_needs_init; then
+  log "Jobs table missing — running init_db($DB_PATH)"
+  /usr/bin/env python3 - "$DB_PATH" <<PY
+import sys
+sys.path.insert(0, "$PROJECT_DIR")
+from src.db import init_db
+conn = init_db(sys.argv[1])
+n = len(conn.execute("PRAGMA table_info(jobs)").fetchall())
+print(f"init_db OK: jobs table has {n} columns")
+conn.close()
+PY
+else
+  log "Jobs table already exists at $DB_PATH"
+fi
+
+# ───────────────────────────────────────────────────────────────────────
+# Scoring config — ADOPT-9 wiring. Default to Lars's tuned config so the
+# dry-run actually scores Founder/CTO roles >100 (see config/lars.yaml).
+# Override with SCORING_CONFIG=./config/example.yaml for stock behavior.
+# ───────────────────────────────────────────────────────────────────────
+: "${SCORING_CONFIG:=$PROJECT_DIR/config/lars.yaml}"
+export SCORING_CONFIG
+log "Scoring config: $SCORING_CONFIG"
+
+# ───────────────────────────────────────────────────────────────────────
 # Log rotation — keep last 14 daily logs, last 30 error logs
 # ───────────────────────────────────────────────────────────────────────
 LOG_DIR="$PROJECT_DIR/logs"
@@ -140,8 +190,7 @@ find "$LOG_DIR" -maxdepth 1 -name "lars-error-*.log" -mtime +30 -delete 2>/dev/n
 exec > >(tee -a "$DAILY_LOG") 2>&1
 exec 3>>"$ERROR_LOG"
 
-log()   { printf '[%s] %s\n' "$(date '+%H:%M:%S %Z')" "$*"; }
-fail()  { log "[FAIL] $*" >&3; log "[FAIL] $*"; exit 1; }
+# log() and fail() defined near the top of the script (before any use).
 
 log "──────────────────────────────────────────────────────────────"
 log "Lars daily pipeline START  (PID $$)"
@@ -255,7 +304,9 @@ fi
 # ───────────────────────────────────────────────────────────────────────
 if [[ "$DRY_RUN" -eq 1 ]]; then
   log "Dry-run: scoring + selection only"
-  /usr/bin/env python3 -m src.scoring.score_jobs --db "$DB_PATH" 2>&1 || true
+  # SCORING_CONFIG exported above — picked up by score_jobs via --config arg.
+  /usr/bin/env SCORING_CONFIG="$SCORING_CONFIG" \
+    python3 -m src.scoring.score_jobs --db "$DB_PATH" --config "$SCORING_CONFIG" 2>&1 || true
   /usr/bin/env python3 -m src.pipeline.batch_pipeline --db "$DB_PATH" --limit 20 --dry-run
   exit 0
 fi
@@ -264,7 +315,9 @@ fi
 # Full run: score → batch → CV/CL → ZIP → Discord summary
 # ───────────────────────────────────────────────────────────────────────
 log "Step 1/3: keyword scoring"
-/usr/bin/env python3 -m src.scoring.score_jobs --db "$DB_PATH" 2>&1 || fail "scoring crashed"
+# SCORING_CONFIG exported above — passed both via env and CLI for belt+suspenders.
+/usr/bin/env SCORING_CONFIG="$SCORING_CONFIG" \
+  python3 -m src.scoring.score_jobs --db "$DB_PATH" --config "$SCORING_CONFIG" 2>&1 || fail "scoring crashed"
 
 log "Step 2/3: batch pipeline (top 50 → CV + CL → ZIP)"
 set +e
