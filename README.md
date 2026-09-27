@@ -12,6 +12,14 @@
 
 ---
 
+## Daily run (Lars's Mac setup)
+
+For the **macOS-local** deployment (no Docker, no VPS, daily 09:00 Brussels delivery to Telegram), see [`docs/DAILY-RUN.md`](docs/DAILY-RUN.md). The wrapper is `scripts/lars-daily-run.sh`, the unfired cron line lives in `scripts/cron.snippet`. Credentials live in `.env` (gitignored).
+
+For the VPS / Hetzner setup that this repo was originally written for, see [`docs/deployment.md`](docs/deployment.md).
+
+---
+
 ## What It Does
 
 This pipeline replaces manual job searching. Instead of checking Indeed, LinkedIn, StepStone, and Arbeitsagentur individually, it:

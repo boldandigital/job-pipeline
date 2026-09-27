@@ -1,0 +1,20 @@
+# ╔═══════════════════════════════════════════════════════════════════════╗
+# ║  CRON.SNIPPET — The unfired daily-run line for ADOPT-5               ║
+# ║                                                                      ║
+# ║  ⚠ NOT auto-installed. Per the task constraint:                       ║
+# ║    "DO NOT actually enable cron without Lars's explicit go signal."  ║
+# ║                                                                      ║
+# ║  Copy-paste into `crontab -e` only after BOTH:                       ║
+# ║    1. `bash scripts/lars-daily-run.sh --test` returns a Telegram msg ║
+# ║    2. `bash scripts/lars-daily-run.sh --dry-run` shows real output  ║
+# ╚═══════════════════════════════════════════════════════════════════════╝
+
+# === ADOPT-5: daily 09:00 Brussels job-pipeline (Lars) ===
+0 9 * * * /bin/bash /Users/lars/Documents/Projects/job-pipeline/scripts/lars-daily-run.sh >/dev/null 2>&1
+
+# Verify with:
+#   crontab -l | grep ADOPT-5
+# Inspect last run:
+#   tail -n 200 /Users/lars/Documents/Projects/job-pipeline/logs/lars-daily-$(date +%Y%m%d).log
+# To remove (pause indefinitely):
+#   crontab -e   →  delete the line above
