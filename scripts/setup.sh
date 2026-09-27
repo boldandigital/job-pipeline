@@ -127,10 +127,16 @@ if [[ ! -f "$ENV_FILE" ]]; then
 # Anthropic API Key (from console.anthropic.com)
 ANTHROPIC_API_KEY=your-key-here
 
-# Discord Webhook URL (from channel ⚙️ Settings → Integrations → Webhooks)
+# Discord delivery (ADOPT-8)
+# We use the SAME Hermes Discord bot — share ~/Documents/Projects/job-pipeline/.env's
+# pattern. For this Docker container, either paste a bot token + channel ID, or
+# set DISCORD_WEBHOOK_URL as a fallback. See ../docs/SECRETS.md for context.
+DISCORD_BOT_TOKEN=<your-bot-token>
+DISCORD_CHANNEL_ID=<channel-snowflake>
+# Optional display name override
+DISCORD_USERNAME=Lars Job Pipeline
+# Legacy webhook (ADOPT-7) — kept for backwards compat; bot mode wins if both are set
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<your_id>/<your_token>
-# Optional: override the webhook bot's display name
-# DISCORD_USERNAME=Lars Job Pipeline
 
 # Proxy for scraping (optional, recommended for Indeed)
 PROXY_URL=http://user:pass@proxy-host:port

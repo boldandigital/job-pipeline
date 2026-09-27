@@ -2,7 +2,9 @@
 # Daily Job Pipeline — runs all steps sequentially
 # Schedule: 02:00 UTC daily via cron
 #
-# Required env vars: DB_PATH, DISCORD_WEBHOOK_URL (optional)
+# Required env vars: DB_PATH
+# Discord: ADOPT-8 — bot mode (DISCORD_BOT_TOKEN + DISCORD_CHANNEL_ID) preferred,
+# webhook (DISCORD_WEBHOOK_URL) still supported as fallback. See config/delivery.yaml.
 #
 # NOTE: Lars's wrapper (scripts/lars-daily-run.sh) handles delivery for the
 # macOS-local 09:00 Brussels cron. This dome317 stock file is kept aligned for
@@ -13,6 +15,8 @@ set -euo pipefail
 LOG="${LOG_DIR:-/tmp}/daily_pipeline.log"
 DB="${DB_PATH:-./data/jobs.db}"
 WEBHOOK="${DISCORD_WEBHOOK_URL:-}"
+BOT_TOKEN="${DISCORD_BOT_TOKEN:-}"
+BOT_CHANNEL="${DISCORD_CHANNEL_ID:-${DISCORD_HOME_CHANNEL:-}}"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== DAILY PIPELINE START: $(date) ===" >> "$LOG"
@@ -55,8 +59,22 @@ print(f'Premium: {p} | Standard: {s} | Total: {p+s} eligible')
 
 echo "Results: +${NEW} new jobs. ${STATS}" >> "$LOG"
 
-# Discord webhook notification (optional)
-if [ -n "$WEBHOOK" ]; then
+# Discord notification (optional) — ADOPT-8: bot mode preferred, webhook fallback
+if [ -n "$BOT_TOKEN" ] && [ -n "$BOT_CHANNEL" ]; then
+  DISCORD_BOT_TOKEN="$BOT_TOKEN" DISCORD_CHANNEL_ID="$BOT_CHANNEL" python3 -c "
+import os, json, urllib.request
+token   = os.environ['DISCORD_BOT_TOKEN']
+channel = os.environ['DISCORD_CHANNEL_ID']
+msg     = f'Daily Pipeline done\n\n+${NEW} new jobs (Total: ${AFTER})\n${STATS}'
+url     = f'https://discord.com/api/v10/channels/{channel}/messages'
+req     = urllib.request.Request(url, data=json.dumps({'content': msg}).encode())
+req.add_header('Authorization', f'Bot {token}')
+req.add_header('Content-Type', 'application/json')
+# Cloudflare blocks default Python-urllib UA with 1010. Identify as DiscordBot.
+req.add_header('User-Agent', 'DiscordBot (job-pipeline, 1.0)')
+urllib.request.urlopen(req, timeout=30)
+" >> "$LOG" 2>&1 || true
+elif [ -n "$WEBHOOK" ]; then
   python3 -c "
 from urllib.request import Request, urlopen
 import json, os

@@ -1,6 +1,6 @@
 # DAILY RUN — Runbook
 
-Cron setup, Discord webhook wiring, and operational playbook for the daily 09:00 Brussels batch.
+Cron setup, Discord delivery wiring, and operational playbook for the daily 09:00 Brussels batch.
 
 Owner: **Lars** (`contact@boldandigital.com`)
 Project: `/Users/lars/Documents/Projects/job-pipeline/`
@@ -11,37 +11,57 @@ Status at last review: **awaiting human "go" to enable.** The cron entry below i
 
 ## 1. ONE-TIME SETUP
 
-### 1.1 Create the Discord webhook (do this on your desktop or phone, ~2 minutes)
+### 1.1 Use the existing Hermes Discord bot (zero setup if you already run Hermes)
 
-Discord webhooks are fire-and-forget HTTP endpoints — no bot token, no chat_id lookup, no polling. Just one URL to paste.
+ADOPT-8: job-pipeline no longer creates its own Discord webhook. We reuse the **same Hermes bot** that already lives in `~/.hermes/.env` and is already posting to your home channel (`DISCORD_HOME_CHANNEL=1497988205788663991`). The bot is in the channel; job-pipeline just points at it.
 
-1. Open Discord and pick the channel you want job-pipeline alerts in (create one if you don't have a private spot — `#job-pipeline-batches` is fine)
-2. Click the channel **⚙️ Settings** (gear icon) → **Integrations** → **Webhooks**
-3. Click **New Webhook**
-4. Name it `Lars Job Pipeline` (or whatever you like); pick the channel you want it posting to
-5. Click **Copy Webhook URL**
-6. Paste the URL into `.env` as `DISCORD_WEBHOOK_URL`
-7. (Optional) Set `DISCORD_USERNAME=Lars Job Pipeline` in `.env` to override the webhook's default bot name
+**Two flavors — pick (a) unless you want a dedicated `#job-pipeline` channel:**
 
-That's it — no `/start` chat with the bot, no `@BotFather`, no numeric chat_id. The webhook URL is the only secret.
+#### (a) Recommended — share the Hermes home channel (zero new config)
 
-**Why Discord over Telegram** (one-time context, won't repeat):
+Do nothing. `lars-daily-run.sh` automatically:
 
-- **One secret, not two** — webhook URL replaces bot token + chat_id
-- **Native file preview** — PDFs render inline, images get thumbnails, no more "download ZIP to see what happened"
-- **Richer Markdown** — embeds, code blocks, tables all render; the daily batch summary now ships with a structured embed (`title` + `fields` + `footer`)
-- **Threads** — replies to a webhook message can carry the ZIP instead of stuffing it into one message
-- **No polling** — webhooks are fire-and-forget HTTP POSTs; no Telegram long-poll state to manage
-- **25 MB per file** — slightly tighter than Telegram's 50 MB cap, but `config/delivery.yaml` already keeps a 24 MB headroom (`max_zip_size_mb: 24`)
+1. Sources `/Users/lars/Documents/Projects/job-pipeline/.env`
+2. Falls back to `~/.hermes/.env` for any missing `DISCORD_*` vars
+3. Defaults `DISCORD_CHANNEL_ID` to `DISCORD_HOME_CHANNEL`
+
+Result: daily batches land in the same Discord channel you're already using to chat with Hermes. No new bot invite, no new token rotation, no new auth surface.
+
+#### (b) Dedicated `#job-pipeline` channel
+
+1. In Discord, create the channel (right-click category → Create Channel → `#job-pipeline`)
+2. Invite the Hermes bot to that channel (the bot is already in your server; just `/invite @<bot-name>` or mention it once to register the channel — Discord bots post anywhere they have `Send Messages` permission)
+3. Copy the channel ID: Discord → ⚙️ Settings → Advanced → enable **Developer Mode** → right-click the new channel → **Copy Channel ID**
+4. Add to `/Users/lars/Documents/Projects/job-pipeline/.env`:
+   ```env
+   DISCORD_CHANNEL_ID=<the-new-snowflake>
+   DISCORD_BOT_TOKEN=<paste from ~/.hermes/.env>
+   ```
+   Or leave `DISCORD_BOT_TOKEN` blank to inherit it from Hermes automatically.
+
+**That's it.** No new bot token, no `/start`, no chat_id. The same Hermes bot posts there.
+
+**Why this beats the old webhook path:**
+
+- **Zero duplicate infra** — no parallel webhook to rotate, no parallel bot to invite
+- **Secrets live in one place** — `~/.hermes/.env`. job-pipeline READS from it (see `docs/SECRETS.md`)
+- **Richer Markdown** — embeds, code blocks, tables all render; the daily batch summary ships with a structured embed (`title` + `fields` + `footer`)
+- **Native file preview** — PDFs render inline, images get thumbnails
+- **25 MB per file** — `config/delivery.yaml` keeps 24 MB headroom (`max_zip_size_mb: 24`)
+
+> **Migration from ADOPT-7 webhook:** if you have an old `DISCORD_WEBHOOK_URL` in `.env`, leave it — the wrapper falls back to it ONLY when no bot creds are set. Once you cut the bot over, delete the line (or move it to `daily_pipeline.sh` for the dome317 Docker path).
 
 ### 1.2 Wire `.env`
 
 ```bash
 cd /Users/lars/Documents/Projects/job-pipeline
 cp .env.example .env
-nano .env   # fill in ANTHROPIC_API_KEY, DISCORD_WEBHOOK_URL
+nano .env   # fill in ANTHROPIC_API_KEY
+# Optional: pin a dedicated DISCORD_CHANNEL_ID (otherwise inherits from Hermes)
 chmod 600 .env                 # keep secrets off prying eyes
 ```
+
+`DISCORD_BOT_TOKEN` does NOT need to live here — the wrapper sources `~/.hermes/.env` automatically. See `docs/SECRETS.md` if you want to override that path.
 
 ### 1.3 Smoke test — Discord ping
 
@@ -49,7 +69,14 @@ chmod 600 .env                 # keep secrets off prying eyes
 bash scripts/lars-daily-run.sh --test
 ```
 
-You should receive `⚓ job-pipeline ping — creds OK, ready for daily run.` in your Discord channel within 5 seconds. If you don't, re-check `DISCORD_WEBHOOK_URL` — the most common slip is a stray space, trailing newline, or pasting the *Copy* button instead of the actual webhook URL.
+You should receive `⚓ job-pipeline ping — creds OK, ready for daily run.` in your Discord channel (the Hermes home channel, unless you set `DISCORD_CHANNEL_ID`) within 5 seconds.
+
+If you don't, check the wrapper's startup banner:
+
+```text
+Discord: mode=bot  channel=1497988205788663991     # ✅ what you want
+Discord: mode=…     channel=                       # ❌ no creds resolved — see docs/SECRETS.md
+```
 
 ### 1.4 Smoke test — what would batch produce today?
 
@@ -195,7 +222,8 @@ launchctl unload ~/Library/LaunchAgents/com.boldandigital.jobpipeline.plist
 ## 7. CONSTRAINTS / GUARDRAILS (do NOT skip)
 
 - **Do not install cron** until you have a working Discord ping — that's a 5-minute smoke test, not optional.
-- **Do not commit `.env`.** It's gitignored. If you accidentally commit a webhook URL, rotate it via Discord channel ⚙️ Settings → Integrations → Webhooks → regenerate (or delete + recreate the webhook).
+- **Do not commit `.env`.** It's gitignored. If you accidentally commit a Discord bot token, rotate it immediately via the Discord Developer Portal → Bot → **Reset Token**. Webhook URLs (ADOPT-7 legacy) get rotated via Discord channel ⚙️ Settings → Integrations → Webhooks.
+- **Bot token reuse:** the job-pipeline bot token IS the Hermes bot token. Rotating it kills both. Coordinate rotations with any other project that shares `~/.hermes/.env`.
 - **DB growth:** `data/jobs.db` grows ~5 MB/week. Vacuum monthly:
   ```bash
   sqlite3 data/jobs.db "VACUUM;"
@@ -210,15 +238,21 @@ launchctl unload ~/Library/LaunchAgents/com.boldandigital.jobpipeline.plist
 ```
 /Users/lars/Documents/Projects/job-pipeline/
 ├── .env                       ← SECRETS (gitignored, chmod 600)
+│                                  ADOPT-8: only ANTHROPIC_API_KEY + (optional) DISCORD_CHANNEL_ID.
+│                                  DISCORD_BOT_TOKEN is inherited from ~/.hermes/.env.
 ├── .env.example               ← template (committed)
 ├── config/
-│   ├── delivery.yaml          ← Discord framing (committed, no secrets)
+│   ├── delivery.yaml          ← Discord framing (committed, no secrets). ADOPT-8: bot + webhook modes.
 │   └── example.yaml           ← scoring + queries (committed)
 ├── scripts/
-│   └── lars-daily-run.sh      ← cron target (chmod +x)
+│   └── lars-daily-run.sh      ← cron target (chmod +x). ADOPT-8: bot-mode default + webhook fallback.
 ├── docs/
-│   └── DAILY-RUN.md           ← this file
+│   ├── DAILY-RUN.md           ← this file
+│   └── SECRETS.md             ← cross-project secret-sharing pattern (ADOPT-8)
 └── logs/                      ← gitignored, self-rotating
     ├── lars-daily-YYYYMMDD.log
     └── lars-error-YYYYMMDD.log
 ```
+
+**Where the Discord secrets actually live:** `~/.hermes/.env` (gitignored, owned by the Hermes project).
+`docs/SECRETS.md` explains the cross-project sharing pattern and how to override the fallback path.
