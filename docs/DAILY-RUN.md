@@ -63,20 +63,48 @@ chmod 600 .env                 # keep secrets off prying eyes
 
 `DISCORD_BOT_TOKEN` does NOT need to live here — the wrapper sources `~/.hermes/.env` automatically. See `docs/SECRETS.md` if you want to override that path.
 
-### 1.3 Smoke test — Discord ping
+### 1.3 Set up the Google Sheet (ADOPT-10 + ADOPT-11)
+
+The daily batch lands in a per-date tab on a Google Sheet, so you can sort, mark ★ Approved, and feed rejection reasons back into scoring. ADOPT-10 writes, ADOPT-11 reads back. Reuses the same Hermes service account as gpl-love — **no new Google project, no new OAuth client, no new secret**.
+
+**One-time setup (≈ 2 minutes):**
+
+1. Open Google Drive → **New** → **Google Sheets** → name it `Lars Job Pipeline`.
+2. Copy the **Spreadsheet ID** from the URL: `https://docs.google.com/spreadsheets/d/<THIS_PART>/edit`
+3. Share the Sheet with the SA: open `~/.hermes/credentials/google-service-account.json`, copy the `client_email` value (something like `hermes-agent@flawless-point-496620-d6.iam.gserviceaccount.com`), then in the Sheet → **Share** → paste that email → **Editor** permission → send.
+4. Add to `/Users/lars/Documents/Projects/job-pipeline/.env`:
+   ```env
+   GOOGLE_SPREADSHEET_ID=<the-spreadsheet-id-from-step-2>
+   ```
+   `GOOGLE_APPLICATION_CREDENTIALS` is already inherited from `~/.hermes/.env` (or uncomment the line in `.env.example` to set it explicitly).
+
+**Daily review flow:**
 
 ```bash
-bash scripts/lars-daily-run.sh --test
+# After the morning batch (or with --sheet to write today's tab on demand):
+bash scripts/lars-daily-run.sh --sheet
 ```
 
-You should receive `⚓ job-pipeline ping — creds OK, ready for daily run.` in your Discord channel (the Hermes home channel, unless you set `DISCORD_CHANNEL_ID`) within 5 seconds.
+1. Open the Sheet → click today's `YYYY-MM-DD` tab.
+2. **Sort** column F (score) descending — top of the list is your best matches.
+3. Mark **column K (`status`)** with one of:
+   - `approved` (or `★`) — you'll apply to these
+   - `rejected` (or `✗`) — see step 4
+   - leave blank — still considering
+4. Mark **column L (`rejection_reason`)** for rejected rows with one of:
+   - `too_junior`, `too_senior`, `wrong_location`, `wrong_domain`, `recruiter`, `language`
+   - `other:<free text>` for anything that doesn't fit
+5. Sync the marks back to the DB before the next scrape:
+   ```bash
+   bash scripts/lars-daily-run.sh --sync-from-sheet   # defaults to yesterday's tab
+   bash scripts/lars-daily-run.sh --sync-from-sheet 2026-09-26   # or an explicit tab
+   ```
 
-If you don't, check the wrapper's startup banner:
+**Why this beats the Discord digest for review:** the Sheet is sortable, filterable, and persists your decisions in one place — no scrolling 50 messages to find what you marked. Discord is still your morning nudge ("the batch is in"); the Sheet is where the actual triage happens.
 
-```text
-Discord: mode=bot  channel=1497988205788663991     # ✅ what you want
-Discord: mode=…     channel=                       # ❌ no creds resolved — see docs/SECRETS.md
-```
+**Idempotent re-runs:** `bash scripts/lars-daily-run.sh --sheet` overwrites today's tab cleanly — re-running never produces duplicate rows. Yesterday's tab is untouched.
+
+**If you skip setup:** `--sheet` silently no-ops (cron won't break). The daily run still finishes with the Discord summary.
 
 ### 1.4 Daily review flow (ADOPT-11)
 
@@ -133,6 +161,21 @@ python3 -m src.analytics.rejection_dashboard --db ./data/jobs.db --window-days 3
 
 The `--window-days` flag lets you backfill: `7` for the last week, `90` for
 a quarterly view, etc.
+
+### 1.6 Smoke test — Discord ping
+
+```bash
+bash scripts/lars-daily-run.sh --test
+```
+
+You should receive `⚓ job-pipeline ping — creds OK, ready for daily run.` in your Discord channel (the Hermes home channel, unless you set `DISCORD_CHANNEL_ID`) within 5 seconds.
+
+If you don't, check the wrapper's startup banner:
+
+```text
+Discord: mode=bot  channel=1497988205788663991     # ✅ what you want
+Discord: mode=…     channel=                       # ❌ no creds resolved — see docs/SECRETS.md
+```
 
 ---
 

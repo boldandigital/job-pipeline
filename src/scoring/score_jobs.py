@@ -5,6 +5,11 @@ Keyword-based job scorer.
 Scores jobs by matching title and description against weighted keyword categories
 defined in a YAML configuration file.
 
+ADOPT-11: Excludes jobs already marked approved/rejected in the DB (status
+filter), so we don't waste cycles re-scoring things Lars has already triaged.
+Those columns live in the same SQLite file; see src/sheet/sync_approvals.py
+for how they get populated.
+
 Usage:
     python -m src.scoring.score_jobs
     python -m src.scoring.score_jobs --config config/example.yaml --db ./data/jobs.db
@@ -63,9 +68,20 @@ def main():
     conn.row_factory = sqlite3.Row
 
     if args.rescore:
+        # --rescore overrides the approval filter on purpose: when tuning
+        # weights you want every row recomputed regardless of status.
         rows = conn.execute("SELECT id, title, description FROM jobs").fetchall()
     else:
-        rows = conn.execute("SELECT id, title, description FROM jobs WHERE score = 0 OR score IS NULL").fetchall()
+        # Default: only score jobs Lars hasn't triaged yet. Once a job is
+        # approved/rejected in the Sheet→DB sync, it stops being a candidate
+        # and stays out of future runs unless --rescore is passed.
+        rows = conn.execute(
+            """
+            SELECT id, title, description FROM jobs
+             WHERE (score = 0 OR score IS NULL)
+               AND (status IS NULL OR status NOT IN ('approved', 'rejected'))
+            """
+        ).fetchall()
 
     log.info("Scoring %d jobs...", len(rows))
 

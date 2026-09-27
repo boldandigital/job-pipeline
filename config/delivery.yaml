@@ -15,7 +15,6 @@
 # ║    • webhook — only DISCORD_WEBHOOK_URL present (legacy fallback)     ║
 # ║    • both    — bot wins, webhook ignored                              ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
-
 discord:
   enabled: true                              # flip to false to mute without uninstalling cron
 
@@ -90,3 +89,61 @@ discord:
     dir: "./logs"
     daily_keep: 14                            # days of daily logs / batch logs to keep
     error_keep: 30
+
+# ╔═══════════════════════════════════════════════════════════════════════╗
+# ║  GOOGLE SHEET DELIVERY — ADOPT-10 (write) + ADOPT-11 (read)            ║
+# ║                                                                      ║
+# ║  Daily batch lands in a per-date tab on Lars's "Job Pipeline" Sheet.  ║
+# ║  Reuses the same Hermes service account as gpl-love (no new secret).  ║
+# ║  Activated by `--sheet` flag on scripts/lars-daily-run.sh.            ║
+# ║  Read back (approval loop) by ADOPT-11 sync_approvals — separate      ║
+# ║  module, same Sheet, same row schema.                                 ║
+# ╚═══════════════════════════════════════════════════════════════════════╝
+sheet:
+  enabled: false                              # opt-in via --sheet flag; cron leaves it off
+  tab_format: "YYYY-MM-DD"                    # per-day tab name (e.g. 2026-09-28)
+  idempotent: true                            # re-running overwrites the day's data block
+
+  # Where the Sheet lives. The ID is from the URL (between /d/ and /edit).
+  # When empty, --sheet silently skips (cron-safe — won't break the run).
+  spreadsheet_id_env: GOOGLE_SPREADSHEET_ID
+
+  # Service account auth. Default points at the Hermes-shared SA at
+  # ~/.hermes/credentials/google-service-account.json. The SA needs Editor
+  # access on the spreadsheet (share it once with the SA's client_email).
+  sa_path_env: GOOGLE_APPLICATION_CREDENTIALS
+  sa_default_path: ~/.hermes/credentials/google-service-account.json
+
+  # Read scopes — spreadsheets only (no Drive, no Gmail).
+  scope: "https://www.googleapis.com/auth/spreadsheets"
+
+  # Row schema (write side). Mirrors DEFAULT_HEADERS_EN in src/sheet/google_writer.py.
+  # ADOPT-11 reads the same columns back to populate jobs.status / rejection_reason.
+  headers:
+    - date_added
+    - source
+    - title
+    - company
+    - location
+    - score
+    - llm_score
+    - url
+    - career_url
+    - description
+    - status          # filled in by Lars during review
+    - rejection_reason
+
+  # Description column — keep the sheet snappy. Long descriptions get
+  # truncated at DESC_MAX_CHARS + "...". Full text lives at the URL.
+  description_max_chars: 500
+
+  # Selection (must match batch_pipeline.py defaults so the Sheet shows the
+  # same rows the Discord summary references).
+  selection:
+    limit: 50
+    min_score: 20
+    exclude_statuses:                         # don't re-show terminal jobs
+      - applied
+      - filtered_out
+      - batched
+      - skipped

@@ -8,6 +8,9 @@
 --     import_jobspy.save_to_db()
 --   - ADOPT-6 added career_url + description (used by ATS discovery + scoring)
 --   - ADOPT-9 unified into this file + src/db/__init__.py:init_db()
+--   - ADOPT-11 added approved_at + rejection_reason for the Sheet→DB approval
+--     feedback loop (sync_approvals.py). approved/rejected jobs are excluded
+--     from future scoring.
 --
 -- Idempotent: every statement uses IF NOT EXISTS. Safe to re-execute.
 -- Run via:  conn.executescript(open("src/db/schema.sql").read())
@@ -38,6 +41,19 @@ CREATE TABLE IF NOT EXISTS jobs (
     llm_match_reason    TEXT,
     llm_scores_json     TEXT,
     llm_scored_at       TIMESTAMP,
+
+    -- ADOPT-11: Sheet→DB approval loop. Set by sync_approvals.py when Lars
+    -- marks rows ★ Approved / ✗ Rejected in the daily Google Sheet.
+    -- approved_at: timestamp of first approval (idempotent — never overwritten
+    --               on re-sync).
+    -- rejection_reason: enum key from REJECTION_REASONS (sync_approvals.py) —
+    --                   'too_junior', 'too_senior', 'wrong_location', etc.
+    --                   Free-text fallback stored as the 'other' enum with the
+    --                   verbatim string in rejection_note.
+    -- rejection_note: optional free-text supplement when reason='other'.
+    approved_at         TIMESTAMP,
+    rejection_reason    TEXT,
+    rejection_note      TEXT,
 
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
