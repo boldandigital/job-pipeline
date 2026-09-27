@@ -1,0 +1,593 @@
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
+# ║        JOB SEARCH PIPELINE — LARS ZIMMERMANN (DACH + Benelux, Founder-track)  ║
+# ╠═══════════════════════════════════════════════════════════════════════════════╣
+# ║  Custom config for Lars Zimmermann (lars.z@icloud.com).                      ║
+# ║                                                                              ║
+# ║  Profile: 12+ years in digital agency + cloud hosting founder.               ║
+# ║           Targeting Founder / CTO / Head-of-Digital / VP Eng.                 ║
+# ║                                                                              ║
+# ║  Geography: DACH (DE/AT/CH) + Benelux (BE/NL/LU) + global remote.            ║
+# ║  Salary floor: €80,000 (Lars's hard minimum — see candidate_profile.md).     ║
+# ║  Seniority: exclude Werkstudent/Junior/Intern only; INCLUDE Senior,         ║
+# ║             Lead, Head, Director, VP, C-Level, Founder.                     ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
+#
+# NOTE: This config tunes the *keyword-based* stage (score_jobs.py) only.
+# dome317's llm_scorer.py's baked-in system prompt still favours entry-level
+# candidates (penalises "senior leadership") — that requires a code change
+# outside this card's scope. Tracked as risk in config.md.
+# Also: apply_filter.py hard-blocks Senior/Lead/CTO titles — THAT IS ALSO A
+# CODE CHANGE OUTSIDE THIS CARD'S SCOPE. Tracked in config.md as the #1
+# blocking issue for adoption.
+
+# ============================================================
+# SEARCH CONFIGURATION
+# ============================================================
+search:
+  sites:
+    - "indeed"
+    - "linkedin"
+
+  locations:
+    - "Remote, Europe"
+    - "Germany"
+    - "Berlin, Germany"           # primary preferred hub
+    - "Munich, Germany"
+    - "Hamburg, Germany"
+    - "Vienna, Austria"
+    - "Zurich, Switzerland"
+    - "Brussels, Belgium"
+    - "Amsterdam, Netherlands"
+    - "Leuven, Belgium"           # Lars lives in Aarschot (near Leuven)
+    - "Aarschot, Belgium"
+
+  country_indeed: "Germany"
+
+  results_wanted: 50             # per query per location
+  hours_old: 336                 # 14 days
+  job_type: "fulltime"
+  distance: 50                   # km radius for location searches
+  linkedin_fetch_description: true
+
+# ============================================================
+# PROXY (Indeed rate limits)
+# ============================================================
+proxy:
+  enabled: true
+  url: "http://USER:PASS@PROXY:PORT"   # populate from .env
+
+# ============================================================
+# THROTTLING
+# ============================================================
+throttling:
+  enabled: true
+  default_delay: 1.5
+  site_delays:
+    indeed: 1.0
+  jitter: 0.3
+  rate_limit_cooldown: 30.0
+
+# ============================================================
+# PARALLEL WORKERS
+# ============================================================
+parallel:
+  max_workers: 4
+
+# ============================================================
+# SEARCH QUERIES — tuned for Lars
+# ============================================================
+# Three buckets, ordered by priority:
+#   1. founder_cto / digital_leadership   — Lars's #1 target
+#   2. technical_leadership               — CTO/Head-of-Engineering
+#   3. agency_hosting_specialist          — niche: where Lars's 12+ years land
+# DACH + Benelux + remote are surfaced in `search.locations` above.
+queries:
+
+  # ─────────────────────────────────────────────────────────
+  # PRIORITY 1 — Founder / CTO / Head-of-Digital leadership
+  # ─────────────────────────────────────────────────────────
+  founder_cto:
+    - "Founder"
+    - "Co-Founder"
+    - "CTO"
+    - "Chief Technology Officer"
+    - "Chief Digital Officer"
+    - "Chief Executive Officer"
+    - "CEO"
+    - "Gründer"
+    - "Mitgründer"
+    - "Geschäftsführer"
+    - "Vorstand"
+    - "Head of Digital"
+    - "Head of Digital Transformation"
+    - "Head of Digital Strategy"
+    - "Head of Technology"
+    - "Head of Engineering"
+    - "Head of Product"
+    - "VP Engineering"
+    - "VP Digital"
+    - "VP Product"
+    - "Director Digital"
+    - "Director Technology"
+    - "Director Engineering"
+    - "Digital Lead"
+    - "Technical Co-Founder"
+
+  # ─────────────────────────────────────────────────────────
+  # PRIORITY 2 — Senior management track (wider net)
+  # ─────────────────────────────────────────────────────────
+  leadership_senior:
+    - "Senior Manager Digital"
+    - "Senior Manager IT"
+    - "Senior Manager Technology"
+    - "Leiter Digital"
+    - "Leiter IT"
+    - "Leiter Technik"
+    - "Bereichsleiter Digital"
+    - "Abteilungsleiter Digital"
+    - "Teamlead Digital"
+    - "Teamlead Engineering"
+    - "Digital Transformation Manager"
+    - "Digital Transformation Lead"
+    - "Director of Engineering"
+    - "Director of Technology"
+    - "Director of Digital"
+
+  # ─────────────────────────────────────────────────────────
+  # PRIORITY 3 — Agency / Hosting / Branding niche (Lars's proven lane)
+  # ─────────────────────────────────────────────────────────
+  agency_hosting_branding:
+    - "Agency Lead"
+    - "Digital Agency Director"
+    - "Managing Director Agency"
+    - "Geschäftsführer Agentur"
+    - "Agenturleitung"
+    - "Cloud Hosting Manager"
+    - "Managed Hosting Lead"
+    - "Head of Hosting"
+    - "Hosting Infrastructure Manager"
+    - "DevOps Lead"
+    - "Head of DevOps"
+    - "Branding Director"
+    - "Head of Brand"
+    - "Brand Director"
+    - "Brand Strategist Lead"
+    - "Web Development Lead"
+    - "Head of Web"
+    - "E-Commerce Director"
+    - "Head of E-Commerce"
+
+# ============================================================
+# SCORING WEIGHTS — tuned for Lars
+# ============================================================
+# Strategy:
+#   - Geography: DACH + Benelux + European remote are HEAVILY boosted
+#   - Seniority/leadership: founder, CTO, VP, Head, Director are HEAVILY boosted
+#   - Domain fit: hosting, devops, agency, branding, salesforce, marketing
+#     strategy — all boosted
+#   - Negative signals: junior/entry/intern hard-rejected, on-site-with-no-remote
+#     heavily penalised
+#   - The 4-tier Premium/Standard/Low/Filtered thresholds remain so dashboard
+#     tiers (150+ / 80-149 / 20-79 / <20) survive.
+scoring:
+  threshold: 20
+
+  weights:
+
+    # ── GEOGRAPHY (highest priority) ────────────────────────
+    # Boost DACH + Benelux hard, demote US/Asia-only.
+    europe_remote: 200
+    dach_benelux_local: 180
+    preferred_city: 160          # Berlin, Munich, Hamburg, Vienna,
+                                 # Zurich, Brussels, Amsterdam, Leuven
+    remote_europe: 160
+    remote_dach: 200             # stronger than generic remote_europe
+    remote_benelux: 180
+    german_language: 120         # bilingual DE/EN — German is a must-have
+
+    # ── SENIORITY (HEAVY boost — Lars is targeting these) ──
+    # These are the exact titles Lars wants. Dome317's apply_filter.py
+    # hard-blocks them — see config.md. Once filter is fixed, these
+    # weights will surface Founder/CTO roles at top of stack.
+    founder: 250
+    c_level: 220
+    cto_role: 240
+    vp_role: 180
+    head_of_role: 200
+    director_role: 170
+    principal_role: 150
+    lead_role: 140
+    senior_role: 110
+
+    # ── DOMAIN FIT (Lars's actual skill set) ───────────────
+    # Boost categories that map directly to his CV
+    web_hosting: 180
+    managed_hosting: 200
+    cloud_infrastructure: 170
+    devops_leadership: 160
+    agency_management: 170
+    branding_strategy: 150
+    market_positioning: 130
+    pricing_strategy: 100
+    salesforce_implementation: 140
+    ecommerce_leadership: 130
+    international_growth: 140
+    team_5_to_15: 80
+    b2b_partner_growth: 90
+
+    # ── WORK-LIFE / CULTURE FIT ────────────────────────────
+    four_day_week: 90
+    async_culture: 90
+    flexible_hours: 60
+    autonomy_culture: 80
+    results_only: 90
+    unlimited_pto: 40
+
+    # ── COMPENSATION ───────────────────────────────────────
+    salary_above_target: 100        # Lars's floor is €80k
+    equity_options: 60
+    founder_equity_split: 120       # extra boost if role offers founder-style equity
+
+    # ── NEGATIVE SIGNALS ───────────────────────────────────
+    # Junior hard-rejected
+    junior_role: -900
+    intern_role: -900
+    entry_level: -700
+
+    # Relocation penalties tuned harder (Lars lives in BE, not moving)
+    relocation_required: -800
+    office_mandatory_no_remote: -500
+    on_site_required: -400
+
+    # Wrong-domain hard rejects
+    pure_coding_ic: -200        # IC-only SWE roles (not lead/architect)
+    pure_sales_carrying_quota: -400
+    pure_hr_recruiting: -300
+    gig_platforms: -900
+    scam_mlm: -900
+    recruiters_third_party: -150
+
+    # Misc penalties
+    high_pressure: -200
+    travel_required_over_25pct: -300
+    us_only_role: -150
+    asia_only_role: -150
+
+  # ─────────────────────────────────────────────────────────
+  # KEYWORD CATEGORIES (must match weight keys)
+  # ─────────────────────────────────────────────────────────
+  keywords:
+
+    # GEOGRAPHY ────────────────────────────────────────────
+    europe_remote:
+      - "anywhere in europe"
+      - "fully remote europe"
+      - "remote-first europe"
+      - "work from anywhere europe"
+
+    dach_benelux_local:
+      - "germany"
+      - "deutschland"
+      - "austria"
+      - "österreich"
+      - "switzerland"
+      - "schweiz"
+      - "belgium"
+      - "belgien"
+      - "netherlands"
+      - "niederlande"
+      - "luxembourg"
+
+    remote_europe:
+      - "remote europe"
+      - "remote eu"
+      - "remote emea"
+      - "european timezone"
+      - "cet"
+      - "cet timezone"
+
+    remote_dach:
+      - "remote dach"
+      - "remote germany"
+      - "remote austria"
+      - "remote switzerland"
+
+    remote_benelux:
+      - "remote belgium"
+      - "remote netherlands"
+      - "remote benelux"
+
+    preferred_city:
+      - "berlin"
+      - "munich"          # also matches münchen
+      - "hamburg"
+      - "vienna"          # also matches wien
+      - "zurich"          # also matches zürich
+      - "brussels"
+      - "amsterdam"
+      - "leuven"
+      - "aarschot"
+
+    german_language:
+      - "german required"
+      - "deutsch erforderlich"
+      - "deutsch und englisch"
+      - "german and english"
+      - "german native"
+
+    # SENIORITY ────────────────────────────────────────────
+    founder:
+      - "founder"
+      - "co-founder"
+      - "cofounder"
+      - "gründer"
+      - "mitgründer"
+      - "geschäftsführer"
+
+    c_level:
+      - \bc-level\b
+      - \bchief executive\b
+      - \bceo\b
+
+    cto_role:
+      - \bcto\b
+      - \bchief technology\b
+      - \bchief digital\b
+      - \bchief product\b
+
+    vp_role:
+      - \bvp\b
+      - \bvp of\b
+      - \bvice president\b
+
+    head_of_role:
+      - \bhead of\b
+
+    director_role:
+      - \bdirector of\b
+
+    principal_role:
+      - \bprincipal\b
+
+    lead_role:
+      - \blead\b
+      - \bteamlead\b
+      - \bteam lead\b
+
+    senior_role:
+      - \bsenior\b
+
+    # DOMAIN FIT ───────────────────────────────────────────
+    web_hosting:
+      - "web hosting"
+      - "hosting"
+      - "webhosting"
+
+    managed_hosting:
+      - "managed hosting"
+      - "managed wordpress"
+      - "managed woocommerce"
+      - "managed infrastructure"
+      - "fully managed"
+
+    cloud_infrastructure:
+      - "cloud infrastructure"
+      - "cloud architecture"
+      - "cloud solutions"
+      - "infrastructure as a service"
+      - "iaas"
+
+    devops_leadership:
+      - "devops lead"
+      - "head of devops"
+      - "devops manager"
+      - "site reliability"
+      - "sre"
+      - "platform engineering"
+
+    agency_management:
+      - "agency"
+      - "agentur"
+      - "digital agency"
+      - "agenturleitung"
+      - "managing director agency"
+
+    branding_strategy:
+      - "brand strategy"
+      - "brand strategist"
+      - "brand director"
+      - "head of brand"
+      - "branding strategy"
+      - "markenstrategie"
+
+    market_positioning:
+      - "market positioning"
+      - "marktpositionierung"
+      - "positioning"
+      - "positionierungsstrategie"
+
+    pricing_strategy:
+      - "pricing strategy"
+      - "preisstrategie"
+      - "pricing"
+      - "4ps"
+      - "4p's"
+
+    salesforce_implementation:
+      - "salesforce"
+      - "salesforce.com"
+      - "salesforce crm"
+
+    ecommerce_leadership:
+      - "e-commerce"
+      - "ecommerce"
+      - "online handel"
+      - "shopify"
+      - "woocommerce"
+      - "head of e-commerce"
+
+    international_growth:
+      - "international growth"
+      - "international expansion"
+      - "international business development"
+      - "international markets"
+
+    team_5_to_15:
+      - "team of 5"
+      - "team of 10"
+      - "team of 15"
+      - "lead a team"
+      - "manage a team"
+
+    b2b_partner_growth:
+      - "b2b"
+      - "partner"
+      - "agency partner"
+      - "partner network"
+
+    # CULTURE ──────────────────────────────────────────────
+    four_day_week:
+      - "4-day week"
+      - "4 day week"
+      - "four day week"
+      - "4-tage-woche"
+      - "32 hours"
+
+    async_culture:
+      - "async"
+      - "asynchronous"
+      - "documentation-first"
+      - "no meetings"
+
+    flexible_hours:
+      - "flexible hours"
+      - "flexible working"
+      - "flextime"
+      - "gleitzeit"
+      - "work-life balance"
+
+    autonomy_culture:
+      - "autonomy"
+      - "self-directed"
+      - "flat hierarchy"
+      - "eigenverantwortung"
+
+    results_only:
+      - "results-oriented"
+      - "results only"
+      - "output-focused"
+      - "outcome-based"
+
+    # COMPENSATION ─────────────────────────────────────────
+    salary_above_target:
+      - "above €80"
+      - "€80,000"
+      - "€90000"
+      - "ab 80000"
+      - "ab 80.000"
+      - "100k"
+      - "120k"
+      - "150k"
+
+    equity_options:
+      - "equity"
+      - "stock options"
+      - "vsop"
+      - "esop"
+
+    founder_equity_split:
+      - "co-founder equity"
+      - "founder-level equity"
+      - "founder package"
+      - "mitgründer anteil"
+
+    # NEGATIVE ─────────────────────────────────────────────
+    junior_role:
+      - \bjunior\b
+      - \bentry-level\b
+      - \bentry level\b
+      - \bberufseinsteiger\b
+      - \bquereinsteiger\b
+
+    intern_role:
+      - \bintern\b
+      - \binternship\b
+      - \bpraktikum\b
+      - \bpraktikant\b
+      - \bwerkstudent\b
+      - \bworking student\b
+      - \bazubi\b
+      - \bausbildung\b
+      - \btrainee\b
+
+    relocation_required:
+      - "relocation required"
+      - "relocation assistance"
+      - "umzugsbereitschaft"
+      - "willing to relocate"
+
+    office_mandatory_no_remote:
+      - "office only"
+      - "no remote"
+      - "nur vor ort"
+
+    on_site_required:
+      - "on-site required"
+      - "on-site only"
+      - "fully on-site"
+      - "vor ort pflicht"
+
+    pure_coding_ic:
+      - "software engineer"
+      - "developer"
+      - "programmierer"
+      - "softwareentwickler"
+      - "individual contributor"
+
+    pure_sales_carrying_quota:
+      - "quota carrying"
+      - "cold calling"
+      - "door to door"
+      - "commission based"
+
+    pure_hr_recruiting:
+      - "recruiter"
+      - "talent acquisition"
+      - "headhunter"
+
+    gig_platforms:
+      - "fiverr"
+      - "upwork"
+      - "freelancer.com"
+      - "commission only"
+
+    scam_mlm:
+      - "network marketing"
+      - "mlm"
+      - "pyramid"
+      - "unlimited earnings"
+
+    high_pressure:
+      - "fast-paced environment"
+      - "high pressure"
+      - "crunch time"
+      - "overtime expected"
+
+    travel_required_over_25pct:
+      - "50% travel"
+      - "75% travel"
+      - "willingness to travel"
+      - "reisebereitschaft"
+
+    us_only_role:
+      - "united states only"
+      - "us-based only"
+      - "usa only"
+      - "new york"
+      - "san francisco"
+
+    asia_only_role:
+      - "singapore only"
+      - "hong kong only"
+      - "tokyo only"
+      - "shanghai only"

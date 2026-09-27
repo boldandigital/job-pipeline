@@ -1,0 +1,105 @@
+
+==========================================================================================
+  BASELINE — dome317/config/example.yaml (entry-level AI persona)
+==========================================================================================
+  ID    SCORE  TIER        VERDICT             TITLE
+------------------------------------------------------------------------------------------
+  C1      445  PREMIUM     DEAL BREAKER        Junior AI Operations Specialist — Entry Level
+  A1      360  PREMIUM     TARGET MATCH        Founder / Co-Founder — B2B SaaS hosting platform
+  A4      260  PREMIUM     TARGET MATCH        VP Engineering — Digital Marketplace Platform
+  B3      260  PREMIUM     STRETCH MATCH       Teamlead DevOps — E-Commerce Platform
+  A3      240  PREMIUM     TARGET MATCH        CTO — Managed Cloud Hosting (scale-up)
+  C5      120  STANDARD    DEAL BREAKER        Praktikum Marketing (Pflicht-Praktikum)
+  C2       80  STANDARD    DEAL BREAKER        Werkstudent IT-Support (m/w/d)
+  A5       80  STANDARD    TARGET MATCH        Digitalagentur Geschäftsführer (m/w/d)
+  B2       70  LOW         STRETCH MATCH       Senior Manager — Digital Transformation
+  A2        0  FILTERED    TARGET MATCH        Head of Digital — International Brand Agency
+  B1        0  FILTERED    STRETCH MATCH       Director of Agency Partnerships — Web Hosting Co.
+  C6     -320  FILTERED    DEAL BREAKER        Director of Product (On-site, San Francisco only)
+  C3     -400  FILTERED    DEAL BREAKER        Senior Software Engineer (IC) — Backend
+  C4     -700  FILTERED    DEAL BREAKER        Account Executive — Outbound SaaS Sales
+------------------------------------------------------------------------------------------
+
+  TARGET MATCHES (5):  ranks = [2, 3, 5, 8, 10]  (lower=better, want 1-5)
+  STRETCH MATCHES (3):  ranks = [4, 9, 11]  (lower=better, want 1-8)
+  DEAL BREAKERS  (6):  ranks = [1, 6, 7, 12, 13, 14]  (HIGHER = better — we want them at the BOTTOM)
+
+  Threshold = 20  |  Premium≥150  Standard≥80  Low≥20  Filtered<20
+==========================================================================================
+
+==========================================================================================
+  LARS TUNED — config/lars.yaml (Founder/CTO/Head-of-Digital, DACH+Benelux)
+==========================================================================================
+  ID    SCORE  TIER        VERDICT             TITLE
+------------------------------------------------------------------------------------------
+  A1     1640  PREMIUM     TARGET MATCH        Founder / Co-Founder — B2B SaaS hosting platform
+  A3     1100  PREMIUM     TARGET MATCH        CTO — Managed Cloud Hosting (scale-up)
+  B1     1100  PREMIUM     STRETCH MATCH       Director of Agency Partnerships — Web Hosting Co.
+  A2      870  PREMIUM     TARGET MATCH        Head of Digital — International Brand Agency
+  B2      770  PREMIUM     STRETCH MATCH       Senior Manager — Digital Transformation
+  A4      670  PREMIUM     TARGET MATCH        VP Engineering — Digital Marketplace Platform
+  A5      640  PREMIUM     TARGET MATCH        Digitalagentur Geschäftsführer (m/w/d)
+  B3      410  PREMIUM     STRETCH MATCH       Teamlead DevOps — E-Commerce Platform
+  C2     -900  FILTERED    DEAL BREAKER        Werkstudent IT-Support (m/w/d)
+  C4     -900  FILTERED    DEAL BREAKER        Account Executive — Outbound SaaS Sales
+  C5    -1240  FILTERED    DEAL BREAKER        Praktikum Marketing (Pflicht-Praktikum)
+  C3    -1380  FILTERED    DEAL BREAKER        Senior Software Engineer (IC) — Backend
+  C6    -1600  FILTERED    DEAL BREAKER        Director of Product (On-site, San Francisco only)
+  C1    -1710  FILTERED    DEAL BREAKER        Junior AI Operations Specialist — Entry Level
+------------------------------------------------------------------------------------------
+
+  TARGET MATCHES (5):  ranks = [1, 2, 4, 6, 7]  (lower=better, want 1-5)
+  STRETCH MATCHES (3):  ranks = [3, 5, 8]  (lower=better, want 1-8)
+  DEAL BREAKERS  (6):  ranks = [9, 10, 11, 12, 13, 14]  (HIGHER = better — we want them at the BOTTOM)
+
+  Threshold = 20  |  Premium≥150  Standard≥80  Low≥20  Filtered<20
+==========================================================================================
+
+==========================================================================================
+  DELTAS — how much Lars tuning moved each archetype
+==========================================================================================
+
+  TARGET MATCHES (we want these UP):
+  ID     baseline       lars        Δ  TITLE
+  A1          360       1640    +1280  Founder / Co-Founder — B2B SaaS hosting platform
+  A2            0        870     +870  Head of Digital — International Brand Agency
+  A3          240       1100     +860  CTO — Managed Cloud Hosting (scale-up)
+  A5           80        640     +560  Digitalagentur Geschäftsführer (m/w/d)
+  A4          260        670     +410  VP Engineering — Digital Marketplace Platform
+
+  DEAL BREAKERS (we want these DOWN / pushed below threshold):
+  ID     baseline       lars        Δ  TITLE
+  C1          445      -1710    -2155  Junior AI Operations Specialist — Entry Level
+  C5          120      -1240    -1360  Praktikum Marketing (Pflicht-Praktikum)
+  C6         -320      -1600    -1280  Director of Product (On-site, San Francisco only)
+  C2           80       -900     -980  Werkstudent IT-Support (m/w/d)
+  C3         -400      -1380     -980  Senior Software Engineer (IC) — Backend
+  C4         -700       -900     -200  Account Executive — Outbound SaaS Sales
+
+==========================================================================================
+  PASS / FAIL GATES — must all check True for ADOPT-4 acceptance
+==========================================================================================
+  [PASS] G1: all TARGET MATCHES score higher in lars.yaml
+           - A1: Δ=+1280
+           - A2: Δ=+870
+           - A3: Δ=+860
+           - A4: Δ=+410
+           - A5: Δ=+560
+  [PASS] G2: all DEAL BREAKERS score below threshold (<20) in lars.yaml
+           - C1: lars=-1710
+           - C2: lars=-900
+           - C3: lars=-1380
+           - C4: lars=-900
+           - C5: lars=-1240
+           - C6: lars=-1600
+  [PASS] G3: ≥3 of 4 TARGET MATCHES hit PREMIUM tier (≥150) in lars.yaml
+           - A1: PREMIUM (1640)
+           - A2: PREMIUM (870)
+           - A3: PREMIUM (1100)
+           - A4: PREMIUM (670)
+           - A5: PREMIUM (640)
+  [PASS] G4: lowest-scoring TARGET MATCH still outranks highest-scoring DEAL BREAKER in lars.yaml
+           - min(target)=640 vs max(deal)=-900
+
+  OVERALL: PASS — all gates green
+==========================================================================================
