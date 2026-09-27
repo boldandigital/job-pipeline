@@ -64,6 +64,18 @@ apply_greenhouse = _load_pkg_member(
     "src.apply.ats_adapters", "greenhouse",
     str(_ADAPTERS_PKG_PATH / "greenhouse.py"),
 )
+apply_workday = _load_pkg_member(
+    "src.apply.ats_adapters", "workday",
+    str(_ADAPTERS_PKG_PATH / "workday.py"),
+)
+apply_lever = _load_pkg_member(
+    "src.apply.ats_adapters", "lever",
+    str(_ADAPTERS_PKG_PATH / "lever.py"),
+)
+apply_ashby = _load_pkg_member(
+    "src.apply.ats_adapters", "ashby",
+    str(_ADAPTERS_PKG_PATH / "ashby.py"),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +151,8 @@ class FakePage:
           - Exact key match: ``#first_name`` matches ``"#first_name"``.
           - CSS attribute-prefix: ``textarea[id^="question_"]`` matches any
             DOM key starting with ``question_``.
+          - CSS attribute-substring: ``input[data-automation-id*="legal"]``
+            matches DOM keys containing ``legal`` (substring inside attr).
           - ID-prefix lookup: ``#question_linkedin`` matches the DOM key
             ``"question_linkedin"`` (since the seed convention drops the #).
           - Comma-separated alternation: ``a, b, c`` is an OR of any clause.
@@ -160,6 +174,14 @@ class FakePage:
                 except IndexError:
                     prefix = ""
                 if prefix and any(k.startswith(prefix) for k in self.dom):
+                    return True
+            # CSS substring selector e.g. input[data-automation-id*="legal"]
+            if "[*=" in clause:
+                try:
+                    needle = clause.split('"')[1]
+                except IndexError:
+                    needle = ""
+                if needle and any(needle in k for k in self.dom):
                     return True
             # Tag + attribute selector e.g. input[type="submit"]
             if clause.startswith("input[") and clause in self.dom:
