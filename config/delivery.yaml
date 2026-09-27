@@ -1,0 +1,39 @@
+# ╔═══════════════════════════════════════════════════════════════════════╗
+# ║  DAILY DELIVERY — Telegram delivery config (Lars's Mac, ADOPT-5)      ║
+# ║                                                                      ║
+# ║  Picked up by scripts/lars-daily-run.sh → sends summary + ZIP via     ║
+# ║  Telegram Bot API. Loaded by the wrapper, NOT by batch_pipeline.py.   ║
+# ║                                                                      ║
+# ║  Secrets are NOT here — TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID live    ║
+# ║  in `.env` (gitignored).                                              ║
+# ╚═══════════════════════════════════════════════════════════════════════╝
+
+telegram:
+  enabled: true                              # flip to false to mute without uninstalling cron
+
+  # Daily summary message framing
+  message:
+    greeting: "Ahoy ⚓ Daily batch is in."
+    include_dashboard_link: true
+    dashboard_url: "http://127.0.0.1:8080"    # localhost-only; tunnel if remote
+    top_n_jobs_in_summary: 5
+    include_overview_md: false                # attach OVERVIEW.md? (extra request)
+
+  # Document delivery
+  documents:
+    attach_zip: true
+    max_zip_size_mb: 45                       # Telegram bot limit = 50MB; keep headroom
+    min_score_to_include: 20                  # skip batched jobs below this score
+    max_jobs_per_batch: 50
+
+  # Schedule metadata (informational — actual schedule lives in crontab)
+  schedule:
+    local_time: "09:00"
+    timezone: "Europe/Brussels"
+    note: "Cron uses local time on macOS, so 09:00 = 09:00 Brussels."
+
+  # Log retention — cron is silent, so wrapper handles its own rotation
+  logs:
+    dir: "./logs"
+    daily_keep: 14                            # days of daily logs / batch logs to keep
+    error_keep: 30
