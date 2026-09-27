@@ -73,7 +73,7 @@ build_sql() {
   if [[ -n "$SINGLE_JOB_ID" ]]; then
     where="id = ${SINGLE_JOB_ID} AND ${where}"
   fi
-  printf "SELECT id, title, company, location, url, career_url, score, source, language FROM jobs WHERE %s ORDER BY score DESC" "$where"
+  printf "SELECT id, title, company, location, url, career_url, score, source FROM jobs WHERE %s ORDER BY score DESC" "$where"
 }
 
 LIST_SQL="$(build_sql)"
