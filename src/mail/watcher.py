@@ -43,6 +43,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email import policy
+import email as _email_lib
 from email.header import decode_header, make_header
 from email.message import EmailMessage
 from email.utils import parsedate_to_datetime
@@ -70,6 +71,7 @@ DEFAULT_IMAP_USER = "lars.z@icloud.com"
 DEFAULT_DB_PATH = os.getenv("DB_PATH") or str(_PROJECT_ROOT / "data" / "jobs.db")
 DEFAULT_STATE_PATH = str(_PROJECT_ROOT / "data" / "mail_state.json")
 DEFAULT_INTERVAL_MIN = int(os.getenv("MAIL_WATCHER_INTERVAL_MIN", "15"))
+MAX_FETCH_PER_POLL = int(os.getenv("MAIL_WATCHER_MAX_FETCH", "100"))
 DEFAULT_FOLDERS = [
     f.strip() for f in os.getenv("MAIL_FOLDERS", "INBOX").split(",") if f.strip()
 ]
@@ -138,10 +140,19 @@ def list_unseen_uids(conn: imaplib.IMAP4_SSL, folder: str) -> List[str]:
     typ, _ = conn.select(folder, readonly=True)
     if typ != "OK":
         raise RuntimeError(f"cannot select folder {folder!r}")
-    typ, data = conn.uid("SEARCH", "", "ALL")
+    # iCloud IMAP rejects `UID SEARCH "" ALL` with Parse Error — must use bare ALL
+    # Standard Gmail accepts the empty charset arg; iCloud does not.
+    typ, data = conn.uid("SEARCH", "ALL")
     if typ != "OK" or not data or not data[0]:
-        return []
-    return data[0].decode("utf-8", "replace").split()
+        # Fallback: try the gmail-style form (covers other providers)
+        typ, data = conn.uid("SEARCH", "", "ALL")
+        if typ != "OK" or not data or not data[0]:
+            return []
+    uids = data[0].decode("utf-8", "replace").split()
+    # Cap to most-recent N to avoid hammering the IMAP server on first poll
+    # (12k+ email inboxes need a sensible default). Cursor persists the high-water
+    # mark in state.json so we don't re-fetch historical ones.
+    return uids[-MAX_FETCH_PER_POLL:]
 
 
 def fetch_message(
@@ -152,7 +163,7 @@ def fetch_message(
     if typ != "OK" or not msg_data or not msg_data[0]:
         raise RuntimeError(f"FETCH failed for uid {uid}")
     raw = msg_data[0][1]
-    msg: EmailMessage = email.message_from_bytes(  # type: ignore[assignment]
+    msg: EmailMessage = _email_lib.message_from_bytes(  # type: ignore[assignment]
         raw, policy=policy.default,
     )
 
