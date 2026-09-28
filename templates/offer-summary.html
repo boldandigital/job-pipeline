@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<!--
+  Offer Summary — 1-page evaluation sheet (MAIL-3).
+
+  Renderer:  auto.offers.summary.render_pdf()
+  Available tokens (all replaced via str.replace, no Jinja):
+    {{title}}        — role title
+    {{company}}       — company name
+    {{applied_date}}  — applied date (YYYY-MM-DD)
+    {{rows}}          — the key-facts table body (rendered by Python)
+    {{why_you}}       — why-this-firm snippet (or fallback italic)
+    {{decisions}}     — decision-button visual row (⭐🟡🔴❓)
+
+  Keep this strictly 1-page. Skip the rows the operator didn't fill in.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Offer — {{title}} — {{company}}</title>
+  <style>
+    /* A4, single page, generous but compact margins */
+    @page { size: A4; margin: 16mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      font-size: 10pt;
+      line-height: 1.45;
+      color: #111;
+      margin: 0;
+    }
+    /* ---- header ---- */
+    h1 {
+      font-size: 18pt;
+      margin: 0 0 2mm 0;
+      font-weight: 700;
+    }
+    .subtitle {
+      font-size: 9pt;
+      color: #666;
+      margin-bottom: 6mm;
+      border-bottom: 0.5pt solid #ccc;
+      padding-bottom: 2mm;
+    }
+    /* ---- key facts table ---- */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0 0 5mm 0;
+    }
+    th, td {
+      padding: 1.6mm 3mm;
+      border-bottom: 0.4pt solid #ddd;
+      font-size: 10pt;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f6f6f6;
+      font-weight: 600;
+      color: #444;
+      width: 35%;
+    }
+    /* ---- why-this-firm snippet ---- */
+    .why {
+      border-left: 3pt solid #4a90e2;
+      background: #fafbfc;
+      padding: 3mm 4mm;
+      font-size: 10pt;
+      line-height: 1.5;
+      margin: 0 0 5mm 0;
+    }
+    .why .label {
+      display: block;
+      font-weight: 600;
+      color: #4a90e2;
+      font-size: 8.5pt;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 1mm;
+    }
+    /* ---- decision buttons (visual row) ---- */
+    .decisions {
+      margin-top: 4mm;
+      padding-top: 3mm;
+      border-top: 0.6pt solid #ccc;
+      text-align: center;
+      font-size: 11pt;
+    }
+    .decisions span {
+      display: inline-block;
+      padding: 1.2mm 3mm;
+      margin: 0 1.5mm;
+      border-radius: 2mm;
+    }
+    .decisions .active {
+      background: #4a90e2;
+      color: #fff;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+<h1>{{title}}</h1>
+<div class="subtitle">
+  <strong>{{company}}</strong> · Applied {{applied_date}}
+</div>
+
+<table>{{rows}}</table>
+
+<div class="why">
+  <span class="label">Why this firm</span>
+  {{why_you}}
+</div>
+
+<div class="decisions">{{decisions}}</div>
+
+</body>
+</html>

@@ -3,3 +3,6 @@ patchright>=0.4.0
 pyyaml>=6.0
 google-api-python-client>=2.100.0
 google-auth>=2.23.0
+weasyprint>=60.0
+gspread>=6.0
+google-auth>=2.0
