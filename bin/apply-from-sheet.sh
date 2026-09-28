@@ -40,11 +40,13 @@ cd "$PROJECT_DIR"
 DRY_RUN=0
 LIMIT=0
 SINGLE_JOB_ID=""
+APPLY_AFTER_GEN=1  # default: also run CUA submission after generation
 for arg in "$@"; do
   case "$arg" in
     --dry-run)         DRY_RUN=1 ;;
     --limit)           LIMIT="${2:-0}"; shift ;;
     --job)             SINGLE_JOB_ID="${2:-}"; shift ;;
+    --no-apply)        APPLY_AFTER_GEN=0 ;;  # ADOPT-12d: allow skipping CUA step
     -h|--help)
       sed -n '2,28p' "$0"
       exit 0
@@ -154,7 +156,7 @@ rows = json.loads(sys.stdin.read())
 for r in rows[:5]:
     print(f\"  • {r['title'][:48]:48s} @ {r['company'][:20]}\")
 if len(rows) > 5:
-    print(f'  … and {len(rows)-5} more in {sys.argv[1]}')
+    print(f\"  … and {len(rows)-5} more in {sys.argv[1]}\")
 " "$ZIP_PATH")"
 
 cat <<EOF
@@ -164,6 +166,29 @@ cat <<EOF
 $TOP_TITLES
 ──────────────────────────────────────────────────────────────
 EOF
+
+# ───────────────────────────────────────────────────────────────────────
+# ADOPT-12d: Run CUA submission pipeline (unless --no-apply)
+# ───────────────────────────────────────────────────────────────────────
+if [[ "$APPLY_AFTER_GEN" -eq 1 ]]; then
+  log "Submitting via CUA driver (ADOPT-12)…"
+  set +e
+  bash "$SCRIPT_DIR/apply-cua.sh" \
+    --db "$DB_PATH" \
+    --batches-dir "$BATCHES_DIR" \
+    --logs-dir "$PROJECT_DIR/logs/apply" \
+    --screenshots-dir "$PROJECT_DIR/screenshots" \
+    --limit "$COUNT" \
+    --delay 30
+  apply_rc=$?
+  set -e
+
+  if [[ $apply_rc -ne 0 ]]; then
+    log "WARN: apply-cua.sh exited $apply_rc — check $PROJECT_DIR/logs/apply for details"
+  else
+    log "CUA submission pipeline completed"
+  fi
+fi
 
 log "apply-from-sheet DONE"
 exit 0

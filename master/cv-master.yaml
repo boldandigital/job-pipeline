@@ -1,0 +1,30 @@
+# ADOPT-12 — Master CV profile for Lars Zimmermann (used by the apply pipeline)
+#
+# This is the canonical source of personal details that ATS adapters consume
+# (first/last name, email, phone, etc.). It is intentionally minimal — the
+# rich narrative profile lives in config/candidate_profile.md, which is used
+# by the LLM scorer.
+#
+# Override via the CV_MASTER_PROFILE env var (e.g. when piping in a new
+# variant for a specific role).
+
+personal:
+  first_name: Lars
+  last_name: Zimmermann
+  email: lars.z@icloud.com
+  phone: "+32 470 123 456"
+  location: "Aarschot, Belgium"
+  linkedin: "https://www.linkedin.com/in/lars-zimmermann-bold-digital/"
+  portfolio: "https://boldandigital.com"
+  summary: >-
+    Founder & CEO of Bold and Digital (2020-) and HostSalt (2021-). 12+ years
+    in digital agency + cloud hosting across DACH + Benelux. Looking for
+    Founder / CTO / Head-of-Digital roles at digital agencies, hosting
+    platforms, and B2B tech scale-ups.
+
+extras:
+  years_experience: 12
+  willing_to_relocate: "No — DACH + Benelux + remote CET only"
+  salary_floor_eur: 80000
+  nationality: "German"
+  work_permit: "EU citizen — no sponsorship required"
