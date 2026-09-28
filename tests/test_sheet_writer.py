@@ -211,23 +211,36 @@ def _sample_jobs():
 # ───────────────────────────────────────────────────────────────────────
 
 class TestRowFromJob:
-    def test_returns_12_columns_in_canonical_order(self):
+    def test_returns_19_columns_in_canonical_order(self):
+        """MAIL-2 expanded the schema from 12 → 19 columns.
+
+        Columns 0-11 are the ADOPT-10 batch columns. Columns 12-18 are
+        the MAIL-2 lifecycle columns (mail_received_at → cv_version).
+        They default to empty strings so :func:`sync_lifecycle` can
+        patch them later.
+        """
         row = row_from_job({"title": "x", "company": "y"}, date_str="2026-09-28")
-        assert len(row) == 12
+        assert len(row) == 19
         assert row[0] == "2026-09-28"
         assert row[1] == ""            # source missing → blank
         assert row[3] == "y"           # company
         assert row[10] == ""          # status — Lars edits
         assert row[11] == ""          # rejection_reason — Lars edits
+        # MAIL-2 lifecycle columns default to blank
+        for idx in range(12, 19):
+            assert row[idx] == "", f"column {idx} ({DEFAULT_HEADERS_EN[idx]}) should default to ''"
 
     def test_default_headers_match_row_order(self):
         """Headers in create_daily_tab are 1:1 with row_from_job columns."""
         row = row_from_job({"title": "x", "company": "y"}, date_str="2026-09-28")
-        assert len(DEFAULT_HEADERS_EN) == len(row) == 12
+        assert len(DEFAULT_HEADERS_EN) == len(row) == 19
         assert DEFAULT_HEADERS_EN == [
             "date_added", "source", "title", "company", "location", "score",
             "llm_score", "url", "career_url", "description", "status",
             "rejection_reason",
+            # MAIL-2 lifecycle columns
+            "mail_received_at", "last_email_subject", "last_email_at",
+            "interview_at", "outcome", "salary_range", "cv_version",
         ]
 
     def test_description_truncated_at_500_with_ellipsis(self):
@@ -314,7 +327,7 @@ class TestAppendJobs:
         assert len(updates) == 1
 
         clear_kwargs = clears[0][2]
-        assert clear_kwargs["range"] == "2026-09-28!A1:L5000"
+        assert clear_kwargs["range"] == "2026-09-28!A1:S5000"
 
         update_kwargs = updates[0][2]
         assert update_kwargs["range"] == "2026-09-28!A2"
@@ -325,7 +338,8 @@ class TestAppendJobs:
         append_jobs(rec, "fake", "2026-09-28", _sample_jobs(), date_str="2026-09-28")
         rows = _calls_named(rec, "values.update")[0][2]["body"]["values"]
         assert len(rows) == 3
-        assert all(len(r) == 12 for r in rows)
+        # MAIL-2 expanded 12 → 19 columns.
+        assert all(len(r) == 19 for r in rows)
 
     def test_long_description_in_jobs_is_truncated(self):
         rec = _fake_service()
