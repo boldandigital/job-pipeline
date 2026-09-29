@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<!--
+  Motivationsschreiben Template: motivationsschreiben-bold.html
+  Purpose: Longer-form motivation letter (1.5-2 pages) in BOLD style.
+          Distinct from the 1-page Anschreiben (DIN 5008).
+          Used for: applications requesting motivation letter instead of cover letter,
+                   academic positions, EU institutions, creative roles.
+  Tokens: name, location, email, phone, linkedin, date, position_title, company,
+          intro_paragraph, story_paragraph, motivation_paragraph, value_paragraph,
+          close_paragraph, signature, photo_url.
+-->
+<html lang="{{lang}}">
+<head>
+  <meta charset="UTF-8">
+  <title>Motivationsschreiben — {{position_title}} — {{company}}</title>
+  <link rel="icon" type="image/jpeg" href="{{photo_url}}">
+  <style>
+    :root {
+      --accent: #0A2540;
+      --text:  #1a1a1a;
+      --muted: #6b7280;
+      --rule:  #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    html { font-size: 11pt; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Inter, Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text);
+      max-width: 720px;
+      margin: 28px auto;
+      padding: 32px 40px;
+      background: #fff;
+      font-feature-settings: "ss01", "cv11";
+      -webkit-font-smoothing: antialiased;
+    }
+    .header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+      padding-bottom: 16px;
+      border-bottom: 3px solid var(--accent);
+      margin-bottom: 28px;
+    }
+    h1 {
+      font-size: 32pt;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin: 0 0 6px;
+      color: var(--accent);
+    }
+    .tagline { font-size: 10.5pt; color: var(--muted); margin: 0; font-weight: 500; }
+    .contact {
+      font-size: 9.5pt;
+      color: var(--muted);
+      line-height: 1.65;
+      margin-top: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .contact a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+    .contact a:hover { border-bottom-color: var(--accent); }
+    .photo {
+      width: 96px;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid var(--rule);
+    }
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10pt;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+    .meta .recipient { line-height: 1.4; color: var(--text); }
+    .title-line {
+      font-size: 13pt;
+      font-weight: 700;
+      margin: 22px 0 18px;
+      padding: 6px 0 6px 14px;
+      border-left: 4px solid var(--accent);
+      color: var(--accent);
+      background: linear-gradient(to right, rgba(10,37,64,0.04), transparent 60%);
+      line-height: 1.25;
+    }
+
+    /* === Sectioned body — each motivation section as a labeled card === */
+    .section {
+      margin: 18px 0;
+      padding: 14px 18px 14px 18px;
+      border-left: 4px solid var(--accent);
+      background: rgba(10, 37, 64, 0.02);
+      border-radius: 2px;
+    }
+    .section h3 {
+      font-size: 9.5pt;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--accent);
+      font-weight: 700;
+      margin: 0 0 8px;
+    }
+    .section p {
+      font-size: 11pt;
+      line-height: 1.65;
+      margin: 0;
+    }
+
+    p.body {
+      font-size: 11pt;
+      line-height: 1.65;
+      margin: 0 0 12px;
+      max-width: 62ch;
+    }
+
+    .signature {
+      margin-top: 32px;
+      font-size: 11pt;
+    }
+    .signature .name {
+      font-weight: 700;
+      font-size: 13pt;
+      color: var(--accent);
+      display: inline-block;
+      border-top: 1px solid var(--accent);
+      padding-top: 4px;
+      letter-spacing: -0.01em;
+    }
+    .signature .muted { color: var(--muted); font-size: 10pt; margin-top: 4px; }
+
+    @page { size: A4; margin: 22mm 22mm; }
+    @media print {
+      body { padding: 0; margin: 0; max-width: 100%; }
+      .title-line, .section { background: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div>
+      <h1>{{name}}</h1>
+      <div class="tagline">{{position_title}}</div>
+      <div class="contact">
+        <div>{{location}}</div>
+        <div><a href="mailto:{{email}}">{{email}}</a></div>
+        <div>{{phone}} · <a href="{{linkedin}}">{{linkedin_short}}</a></div>
+      </div>
+    </div>
+    <img class="photo" src="{{photo_url}}" alt="{{name}} — professional headshot">
+  </header>
+
+  <div class="meta">
+    <div class="recipient">{{recipient_block}}</div>
+    <div class="date">{{date}}</div>
+  </div>
+
+  <h2 class="title-line">Motivationsschreiben — {{position_title}} bei {{company}}</h2>
+
+  <p class="body">{{intro_paragraph}}</p>
+
+  <section class="section">
+    <h3>Mein Hintergrund</h3>
+    <p>{{story_paragraph}}</p>
+  </section>
+
+  <section class="section">
+    <h3>Meine Motivation</h3>
+    <p>{{motivation_paragraph}}</p>
+  </section>
+
+  <section class="section">
+    <h3>Mein Beitrag</h3>
+    <p>{{value_paragraph}}</p>
+  </section>
+
+  <p class="body">{{close_paragraph}}</p>
+
+  <div class="signature">
+    <span class="name">{{name}}</span>
+    <div class="muted">{{name}}</div>
+  </div>
+
+</body>
+</html>

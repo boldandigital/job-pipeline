@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<!--
+  Anschreiben Template: anschreiben-bold.html
+  Purpose: BOLD-style cover letter matching cv-bold.html aesthetic.
+  Style: same Linear/Vercel-inspired design language
+         - Navy #0A2540 accent + left-rule section markers
+         - Asymmetric header (huge name + photo)
+         - Generous whitespace, geometric photo frame
+         - Bold typography hierarchy
+         - Still DIN 5008:2020-03 compliant (sender block, recipient block, date, subject, body, signature)
+  Renderer: cover_letter_generator.py
+  Tokens: name, location, email, phone, linkedin, date, subject_line, salutation,
+          opening, me_paragraph, why_you_paragraph, close, signature,
+          recipient_block, position_title, company, photo_url.
+-->
+<html lang="{{lang}}">
+<head>
+  <meta charset="UTF-8">
+  <title>Anschreiben — {{position_title}} — {{company}}</title>
+  <meta name="description" content="{{name}} — Bewerbung als {{position_title}} bei {{company}}">
+  <link rel="icon" type="image/jpeg" href="{{photo_url}}">
+
+  <style>
+    :root {
+      --accent: #0A2540;
+      --text:  #1a1a1a;
+      --muted: #6b7280;
+      --rule:  #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    html { font-size: 11pt; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Inter, Arial, sans-serif;
+      line-height: 1.55;
+      color: var(--text);
+      max-width: 720px;
+      margin: 28px auto;
+      padding: 32px 40px;
+      background: #fff;
+      font-feature-settings: "ss01", "cv11";
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* === HEADER (matches CV bold style) === */
+    .header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+      padding-bottom: 16px;
+      border-bottom: 3px solid var(--accent);
+      margin-bottom: 28px;
+    }
+    h1 {
+      font-size: 32pt;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin: 0 0 6px;
+      color: var(--accent);
+    }
+    .tagline {
+      font-size: 10.5pt;
+      color: var(--muted);
+      margin: 0;
+      font-weight: 500;
+    }
+    .contact {
+      font-size: 9.5pt;
+      color: var(--muted);
+      line-height: 1.65;
+      margin-top: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .contact a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+    .contact a:hover { border-bottom-color: var(--accent); }
+    .photo {
+      width: 96px;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid var(--rule);
+    }
+
+    /* === LETTER BODY (DIN 5008) === */
+    .recipient {
+      font-size: 10.5pt;
+      line-height: 1.4;
+      margin: 0 0 18px;
+      color: var(--text);
+    }
+    .date {
+      text-align: right;
+      font-size: 10pt;
+      color: var(--muted);
+      margin: 0 0 14px;
+    }
+
+    .subject {
+      font-size: 13pt;
+      font-weight: 700;
+      margin: 24px 0 20px;
+      padding: 6px 0 6px 14px;
+      border-left: 4px solid var(--accent);
+      color: var(--accent);
+      background: linear-gradient(to right, rgba(10,37,64,0.04), transparent 60%);
+      line-height: 1.25;
+    }
+
+    .salutation {
+      font-size: 11pt;
+      margin: 0 0 14px;
+      font-weight: 500;
+    }
+
+    p.body {
+      font-size: 11pt;
+      line-height: 1.65;
+      margin: 0 0 12px;
+      max-width: 62ch;
+    }
+    p.body strong { color: var(--accent); font-weight: 600; }
+
+    /* Section markers inside body — left-rule eyebrow */
+    .why-you {
+      padding: 6px 0 6px 14px;
+      border-left: 4px solid var(--accent);
+      background: linear-gradient(to right, rgba(10,37,64,0.04), transparent 60%);
+      margin: 18px 0;
+    }
+
+    .signature {
+      margin-top: 36px;
+      font-size: 11pt;
+    }
+    .signature .name {
+      font-weight: 700;
+      font-size: 13pt;
+      color: var(--accent);
+      display: inline-block;
+      border-top: 1px solid var(--accent);
+      padding-top: 4px;
+      letter-spacing: -0.01em;
+    }
+    .signature .muted {
+      color: var(--muted);
+      font-size: 10pt;
+      margin-top: 4px;
+    }
+
+    /* Small "Anlage" line at very bottom */
+    .attachments {
+      margin-top: 32px;
+      padding-top: 12px;
+      border-top: 1px solid var(--rule);
+      font-size: 9pt;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    @page { size: A4; margin: 22mm 22mm; }
+    @media print {
+      body { padding: 0; margin: 0; max-width: 100%; }
+      .subject, .why-you { background: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div>
+      <h1>{{name}}</h1>
+      <div class="tagline">{{position_title}}</div>
+      <div class="contact">
+        <div>{{location}}</div>
+        <div><a href="mailto:{{email}}">{{email}}</a></div>
+        <div>{{phone}} · <a href="{{linkedin}}">{{linkedin_short}}</a></div>
+      </div>
+    </div>
+    <img class="photo" src="{{photo_url}}" alt="{{name}} — professional headshot">
+  </header>
+
+  <section class="recipient">
+    {{recipient_block}}
+  </section>
+
+  <div class="date">{{date}}</div>
+
+  <h2 class="subject">{{subject_line}}</h2>
+
+  <p class="salutation">{{salutation}}</p>
+
+  <p class="body">{{opening}}</p>
+
+  <p class="body">{{me_paragraph}}</p>
+
+  <div class="why-you">
+    <p class="body">{{why_you_paragraph}}</p>
+  </div>
+
+  <p class="body">{{close}}</p>
+
+  <div class="signature">
+    <span class="name">{{name}}</span>
+    <div class="muted">{{name}}</div>
+  </div>
+
+  <div class="attachments">
+    Anlagen: {{attachments_list}}
+  </div>
+
+</body>
+</html>
