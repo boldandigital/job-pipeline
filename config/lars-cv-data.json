@@ -1,0 +1,90 @@
+{
+  "personal": {
+    "name": "Lars Zimmermann",
+    "title_en": "Founder & CEO — Digital Agency, Cloud Hosting, Branding & Growth",
+    "title_de": "Gründer & CEO — Digitalagentur, Cloud Hosting, Branding & Wachstum",
+    "email": "lars.z@icloud.com",
+    "phone": "",
+    "location": "Aarschot, Flemish Region, Belgium",
+    "linkedin": "https://www.linkedin.com/in/larsz",
+    "websites": ["https://boldandigital.com", "https://hostsalt.com"],
+    "photo_path": null
+  },
+  "summary_en": "Founder and CEO of Bold and Digital LLC since 2020, leading a digital agency that helps international clients — including LiteSpeed Technologies and QUIC.cloud — sharpen their digital presence through tailored web development, branding, market positioning, pricing strategy, and cloud solutions. 12+ years building and scaling businesses in Europe and Asia, combining strategic marketing with hands-on technical execution. As founder of HostSalt since 2021, I also design and operate fully managed hosting infrastructure for agencies, e-commerce businesses, and developers. Bilingual German/English, comfortable in Portuguese, with a track record of turning complex digital challenges into measurable growth.",
+  "summary_de": "Gründer und CEO der Bold and Digital LLC seit 2020. Ich leite eine Digitalagentur, die internationale Kunden — darunter LiteSpeed Technologies und QUIC.cloud — bei Webentwicklung, Branding, Marktpositionierung, Preisstrategie und Cloud-Lösungen unterstützt. 12+ Jahre Erfahrung im Aufbau und der Skalierung von Unternehmen in Europa und Asien, mit einer Kombination aus strategischem Marketing und hands-on technischer Umsetzung. Als Gründer von HostSalt seit 2021 konzipiere und betreibe ich zusätzlich vollständig verwaltete Hosting-Infrastruktur für Agenturen, E-Commerce-Unternehmen und Entwickler. Deutsch/Englisch zweisprachig, Portugiesisch Grundkenntnisse, mit nachweislicher Erfolgsbilanz bei der Übersetzung komplexer digitaler Herausforderungen in messbares Wachstum.",
+  "experience": [
+    {
+      "period": "2020-06 → present",
+      "company": "Bold and Digital LLC",
+      "location": "Leuven, Flemish Region, Belgium",
+      "role_en": "Founder & CEO",
+      "role_de": "Gründer & CEO",
+      "bullets_en": [
+        "Built and scaled a digital agency serving 20+ international clients (LiteSpeed, QUIC.cloud) across 4 continents, with tailored web development, branding, and cloud solutions.",
+        "Implemented 4Ps / 4S marketing framework across 15+ client engagements to sharpen positioning and pricing — driving an estimated 20-30% improvement in client profit margins.",
+        "Improved workflows and cost-efficiency across 30+ projects, cutting average project delivery time by ~25% through standardised operational and technical procedures."
+      ],
+      "bullets_de": [
+        "Aufbau und Skalierung einer Digitalagentur mit 20+ internationalen Kunden (LiteSpeed, QUIC.cloud) auf 4 Kontinenten, mit massgeschneiderter Webentwicklung, Branding und Cloud-Lösungen.",
+        "Implementierung des 4Ps/4S-Marketing-Frameworks in 15+ Kundenprojekten zur Schärfung von Positionierung und Preisstrategie — mit einer geschätzten Margenverbesserung von 20-30% bei den Kunden.",
+        "Optimierung von Workflows und Kosteneffizienz in 30+ Projekten, Reduzierung der durchschnittlichen Projektdurchlaufzeit um ~25% durch standardisierte operative und technische Verfahren."
+      ]
+    },
+    {
+      "period": "2021-07 → present",
+      "company": "HostSalt",
+      "location": "Aarschot, Flemish Region, Belgium",
+      "role_en": "Founder & Technical Lead",
+      "role_de": "Gründer & Technical Lead",
+      "bullets_en": [
+        "Founded and operate a boutique managed WordPress/WooCommerce hosting platform targeting small businesses and agencies in Belgium and Germany — currently serving 40+ active sites with 99.9% uptime SLA.",
+        "Designed and maintained infrastructure stack (LiteSpeed, MariaDB, Redis, automated backups) across 3 datacenter regions, reducing customer TTFB by 40% versus previous providers.",
+        "Built NPS-driven service framework achieving 60+ NPS score across customer base; standardised onboarding + support playbooks that compress average onboarding time from 5 days to under 24 hours."
+      ],
+      "bullets_de": [
+        "Gründung und Betrieb einer Boutique Managed WordPress/WooCommerce Hosting-Plattform für kleine Unternehmen und Agenturen in Belgien und Deutschland — aktuell 40+ aktive Sites mit 99,9% Uptime-SLA.",
+        "Konzeption und Wartung des Infrastruktur-Stacks (LiteSpeed, MariaDB, Redis, automatisierte Backups) über 3 Datacenter-Regionen, Reduzierung des Kunden-TTFB um 40% im Vergleich zu vorherigen Providern.",
+        "Aufbau eines NPS-getriebenen Service-Frameworks mit 60+ NPS-Score in der Kundenbasis; standardisierte Onboarding- und Support-Playbooks, die die durchschnittliche Onboarding-Zeit von 5 Tagen auf unter 24 Stunden verkürzen."
+      ]
+    }
+  ],
+  "skills": {
+    "en": [
+      "Web Hosting & Managed Infrastructure",
+      "DevOps & Cloud Architecture",
+      "Branding & Market Positioning",
+      "Salesforce.com Implementation",
+      "Pricing Strategy (4Ps / 4S Framework)",
+      "International Business Development",
+      "Team & Agency Coordination",
+      "Performance & Cost Optimization",
+      "SEO, SEM & Analytics",
+      "E-Commerce (WooCommerce, B2B Sales)"
+    ],
+    "de": [
+      "Web Hosting & Managed Infrastructure",
+      "DevOps & Cloud-Architektur",
+      "Branding & Marktpositionierung",
+      "Salesforce.com Implementierung",
+      "Preisstrategie (4Ps / 4S Framework)",
+      "Internationale Geschäftsentwicklung",
+      "Team- & Agenturkoordination",
+      "Performance- & Kostenoptimierung",
+      "SEO, SEM & Analytics",
+      "E-Commerce (WooCommerce, B2B-Vertrieb)"
+    ]
+  },
+  "languages": [
+    {"lang_en": "German", "level": "Native or Bilingual Proficiency"},
+    {"lang_en": "English", "level": "Full Professional Proficiency"},
+    {"lang_de": "Deutsch", "level": "Muttersprache oder zweisprachig"},
+    {"lang_de": "Englisch", "level": "Verhandlungssicher"}
+  ],
+  "education": [
+    {
+      "degree": "Master of Arts (M.A.) — Communication Science / Media Studies",
+      "university": "University of Passau, Germany",
+      "period": "2004 – 2012"
+    }
+  ]
+}

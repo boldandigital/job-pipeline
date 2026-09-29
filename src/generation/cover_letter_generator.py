@@ -15,16 +15,30 @@ Usage:
 
 import argparse
 import base64
+import json
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
-PERSONAL = {
-    "name": os.getenv("CANDIDATE_NAME", "Your Name"),
-    "email": os.getenv("CANDIDATE_EMAIL", "your.email@example.com"),
-    "phone": os.getenv("CANDIDATE_PHONE", "+49 123 456789"),
-    "location": os.getenv("CANDIDATE_LOCATION", "Berlin"),
-}
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_CV_DATA_PATH = Path(os.getenv("CV_DATA_PATH", str(_PROJECT_ROOT / "config" / "lars-cv-data.json")))
+
+def _load_cv_data() -> dict:
+    if _CV_DATA_PATH.exists():
+        with open(_CV_DATA_PATH) as f:
+            return json.load(f)
+    return {
+        "personal": {
+            "name": os.getenv("CANDIDATE_NAME", "Lars Zimmermann"),
+            "email": os.getenv("CANDIDATE_EMAIL", "lars.z@icloud.com"),
+            "phone": os.getenv("CANDIDATE_PHONE", ""),
+            "location": os.getenv("CANDIDATE_LOCATION", "Aarschot, Flemish Region, Belgium"),
+        }
+    }
+
+CV_DATA = _load_cv_data()
+PERSONAL = CV_DATA["personal"]
 
 PHOTO_PATH = os.getenv("PHOTO_PATH", "./config/photo.png")
 

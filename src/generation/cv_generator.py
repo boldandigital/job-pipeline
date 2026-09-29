@@ -2,13 +2,13 @@
 """
 CV Generator — HTML to PDF via Patchright.
 
-Generates pixel-perfect CVs from structured data. Supports multiple variants
-(ai_heavy, technical, product, operations) with different emphasis.
+Generates pixel-perfect CVs from structured data. Loads real profile from
+config/lars-cv-data.json (sourced from profiles/lars-zimmermann.md).
 
 Usage:
     python -m src.generation.cv_generator \
         --company "Acme Corp" \
-        --tagline "AI & Automation Specialist" \
+        --tagline "Founder & CEO — Digital Agency, Cloud Hosting, Branding & Growth" \
         --language en \
         --output ./output/CV_Acme.pdf
 """
@@ -19,16 +19,31 @@ import json
 import os
 import sys
 import tempfile
+from pathlib import Path
 
 # ============================================================================
-# CONFIGURATION — loaded from environment or config files
+# CONFIGURATION — load real profile from config/lars-cv-data.json
 # ============================================================================
-PERSONAL = {
-    "name": os.getenv("CANDIDATE_NAME", "Your Name"),
-    "email": os.getenv("CANDIDATE_EMAIL", "your.email@example.com"),
-    "phone": os.getenv("CANDIDATE_PHONE", "+49 123 456789"),
-    "location": os.getenv("CANDIDATE_LOCATION", "Berlin"),
-}
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_CV_DATA_PATH = Path(os.getenv("CV_DATA_PATH", str(_PROJECT_ROOT / "config" / "lars-cv-data.json")))
+
+def _load_cv_data() -> dict:
+    """Load Lars's real CV data. Falls back to env vars if file missing."""
+    if _CV_DATA_PATH.exists():
+        with open(_CV_DATA_PATH) as f:
+            return json.load(f)
+    # Fallback: minimal env-var only mode
+    return {
+        "personal": {
+            "name": os.getenv("CANDIDATE_NAME", "Lars Zimmermann"),
+            "email": os.getenv("CANDIDATE_EMAIL", "lars.z@icloud.com"),
+            "phone": os.getenv("CANDIDATE_PHONE", ""),
+            "location": os.getenv("CANDIDATE_LOCATION", "Aarschot, Flemish Region, Belgium"),
+        }
+    }
+
+CV_DATA = _load_cv_data()
+PERSONAL = CV_DATA["personal"]
 
 PHOTO_PATH = os.getenv("PHOTO_PATH", "./config/photo.png")
 
@@ -72,50 +87,10 @@ EXPERIENCE = {
     },
 }
 
-EDUCATION = {
-    "masters": {
-        "degree_en": "M.Sc. Business Informatics",
-        "degree_de": "M.Sc. Wirtschaftsinformatik",
-        "university": "University of Berlin",
-        "period": "2022 – 2024",
-        "focus_en": "Data Analytics, AI/ML, Digital Business",
-        "focus_de": "Data Analytics, AI/ML, Digital Business",
-    },
-    "bachelors": {
-        "degree_en": "B.Sc. Business Informatics",
-        "degree_de": "B.Sc. Wirtschaftsinformatik",
-        "university": "University of Munich",
-        "period": "2018 – 2022",
-    },
-}
-
-PROJECTS = [
-    {
-        "name": "Job Search Pipeline",
-        "desc_en": "Autonomous job aggregation system — 4 platforms, scoring engine, Telegram alerts",
-        "desc_de": "Autonomes Job-Aggregationssystem — 4 Plattformen, Scoring-Engine, Telegram-Alerts",
-        "tech": "Python, SQLite, Docker, Claude API, Playwright",
-    },
-    {
-        "name": "AI Content Engine",
-        "desc_en": "Content generation platform with scheduling, quality detection, API endpoints",
-        "desc_de": "Content-Generierungsplattform mit Scheduling, Qualitätserkennung, API-Endpoints",
-        "tech": "TypeScript, Node.js, PostgreSQL, Redis",
-    },
-]
-
-SKILLS = {
-    "ai_llm": ["Claude API", "GPT-4", "LangChain", "RAG", "Prompt Engineering", "ComfyUI"],
-    "automation": ["n8n", "Zapier", "UiPath", "Power Automate", "Docker"],
-    "programming": ["Python", "TypeScript/JavaScript", "SQL", "Bash"],
-    "cloud": ["AWS", "Azure", "Docker", "Git", "CI/CD", "Linux"],
-    "business": ["Jira", "Confluence", "Power BI", "Tableau", "Excel"],
-}
-
-LANGUAGES = [
-    {"name": "German", "level": "Native"},
-    {"name": "English", "level": "Fluent (C1)"},
-]
+EXPERIENCE = CV_DATA.get("experience", [])
+EDUCATION = CV_DATA.get("education", [])
+SKILLS = CV_DATA.get("skills", {"en": [], "de": []})
+LANGUAGES = CV_DATA.get("languages", [])
 
 
 # ============================================================================
@@ -196,7 +171,7 @@ def build_html(tagline, language="en", order=None):
     """Build the CV HTML document."""
     lang = language.lower()
     if order is None:
-        order = ["experience", "education", "projects", "skills"]
+        order = ["summary", "experience", "education", "skills"]
 
     photo_b64 = ""
     if os.path.exists(PHOTO_PATH):
@@ -206,17 +181,32 @@ def build_html(tagline, language="en", order=None):
     sections = []
 
     for section in order:
-        if section == "experience":
+        if section == "summary":
+            summary = CV_DATA.get(f"summary_{lang}", CV_DATA.get("summary_en", ""))
+            if summary:
+                html = f'<h2>{"Profil" if lang == "de" else "Profile"}</h2>'
+                html += f'<p style="margin-bottom:10px;font-size:9.5pt">{summary}</p>'
+                sections.append(html)
+
+        elif section == "experience":
             html = f'<h2>{"Berufserfahrung" if lang == "de" else "Experience"}</h2>'
-            for key, exp in EXPERIENCE.items():
+            for exp in EXPERIENCE:
                 title = exp.get(f"title_{lang}", exp.get("title_en", ""))
                 role = exp.get(f"role_{lang}", exp.get("role_en", ""))
                 bullets = exp.get(f"bullets_{lang}", exp.get("bullets_en", []))
+                period = exp.get("period", "")
+                location = exp.get("location", "")
+                header_parts = []
+                if title:
+                    header_parts.append(title)
+                if location:
+                    header_parts.append(location)
+                header = " · ".join(header_parts)
                 html += f"""
                 <div class="entry">
                     <div class="entry-header">
-                        <span>{title}</span>
-                        <span>{exp['period']}</span>
+                        <span>{header}</span>
+                        <span>{period}</span>
                     </div>
                     <div class="entry-role">{role}</div>
                     <ul>{"".join(f"<li>{b}</li>" for b in bullets)}</ul>
@@ -225,64 +215,60 @@ def build_html(tagline, language="en", order=None):
 
         elif section == "education":
             html = f'<h2>{"Ausbildung" if lang == "de" else "Education"}</h2>'
-            for key, edu in EDUCATION.items():
-                degree = edu.get(f"degree_{lang}", edu.get("degree_en", ""))
+            for edu in EDUCATION:
+                degree = edu.get("degree", "")
                 html += f"""
                 <div class="entry">
                     <div class="entry-header">
                         <span>{degree}</span>
-                        <span>{edu['period']}</span>
+                        <span>{edu.get("period", "")}</span>
                     </div>
-                    <div class="entry-role">{edu['university']}</div>
-                </div>"""
-            sections.append(html)
-
-        elif section == "projects":
-            html = f'<h2>{"Projekte" if lang == "de" else "Projects"}</h2>'
-            for proj in PROJECTS:
-                desc = proj.get(f"desc_{lang}", proj.get("desc_en", ""))
-                html += f"""
-                <div class="entry">
-                    <div class="entry-header"><span>{proj['name']}</span></div>
-                    <div>{desc}</div>
-                    <div style="color:#718096;font-size:8.5pt">{proj['tech']}</div>
+                    <div class="entry-role">{edu.get("university", "")}</div>
                 </div>"""
             sections.append(html)
 
         elif section == "skills":
-            html = f'<h2>{"Kenntnisse" if lang == "de" else "Skills"}</h2><div class="skills-grid">'
-            for cat, items in SKILLS.items():
-                label = cat.replace("_", " ").title()
-                html += f'<div><span class="skill-category">{label}:</span> {", ".join(items)}</div>'
-            html += "</div>"
+            skills = SKILLS.get(lang, SKILLS.get("en", []))
+            html = f'<h2>{"Kenntnisse" if lang == "de" else "Skills"}</h2><ul style="margin-bottom:10px">'
+            for skill in skills:
+                html += f'<li>{skill}</li>'
+            html += "</ul>"
 
             html += f'<h2>{"Sprachen" if lang == "de" else "Languages"}</h2>'
-            html += ", ".join(f"{l['name']} ({l['level']})" for l in LANGUAGES)
+            html += "<ul>" + "".join(
+                f'<li>{l.get("lang_en", l.get("lang_de", ""))} — {l.get("level", "")}</li>'
+                for l in LANGUAGES
+            ) + "</ul>"
             sections.append(html)
 
     photo_html = ""
     if photo_b64:
         photo_html = f'<img class="photo" src="data:image/png;base64,{photo_b64}" alt="Photo">'
 
+    contact = []
+    if PERSONAL.get("email"):
+        contact.append(f'<a href="mailto:{PERSONAL["email"]}">{PERSONAL["email"]}</a>')
+    if PERSONAL.get("linkedin"):
+        contact.append(f'<a href="{PERSONAL["linkedin"]}">{PERSONAL["linkedin"].replace("https://", "")}</a>')
+    if PERSONAL.get("location"):
+        contact.append(PERSONAL["location"])
+    contact_html = " · ".join(contact)
+
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>{get_css()}</style></head>
 <body>
     <div class="header">
         <div class="header-left">
-            <h1>{PERSONAL['name']}</h1>
+            <h1>{PERSONAL.get('name', 'Lars Zimmermann')}</h1>
             <div class="tagline">{tagline}</div>
         </div>
-        <div style="display:flex;align-items:flex-start">
-            <div class="contact">
-                {PERSONAL['email']}<br>
-                {PERSONAL['phone']}<br>
-                {PERSONAL['location']}
-            </div>
-            {photo_html}
-        </div>
+        <div class="contact">{contact_html}</div>
+        {photo_html}
     </div>
-    {"".join(sections)}
-</body></html>"""
+    {''.join(sections)}
+</body>
+</html>
+"""
 
 
 def html_to_pdf(html, output_path):
@@ -310,7 +296,7 @@ def main():
     parser.add_argument("--company", required=True, help="Company name for filename")
     parser.add_argument("--tagline", default="AI & Automation Specialist", help="Tagline under name")
     parser.add_argument("--language", default="en", choices=["en", "de"], help="Language")
-    parser.add_argument("--order", default="experience,education,projects,skills",
+    parser.add_argument("--order", default="summary,experience,education,skills",
                         help="Section order (comma-separated)")
     parser.add_argument("--output", default=None, help="Output PDF path")
     args = parser.parse_args()
