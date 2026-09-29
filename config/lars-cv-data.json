@@ -10,8 +10,8 @@
     "websites": ["https://boldandigital.com", "https://hostsalt.com"],
     "photo_path": null
   },
-  "summary_en": "Founder and CEO of Bold and Digital LLC since 2020, leading a digital agency that helps international clients — including LiteSpeed Technologies and QUIC.cloud — sharpen their digital presence through tailored web development, branding, market positioning, pricing strategy, and cloud solutions. 12+ years building and scaling businesses in Europe and Asia, combining strategic marketing with hands-on technical execution. As founder of HostSalt since 2021, I also design and operate fully managed hosting infrastructure for agencies, e-commerce businesses, and developers. Previously led international marketing teams in Shanghai for Strichpunkt Design, Axus Stationery (one of the world's largest pencil producers, supplying Faber-Castell/Maped/BIC) and Neobear (Qualcomm/ZTE-backed AR-for-kids). Trilingual: native German, full-professional English, business Mandarin; conversational Portuguese and Dutch. Track record of turning complex digital challenges into measurable growth across 4 continents and 12+ international markets.",
-  "summary_de": "Gründer und CEO der Bold and Digital LLC seit 2020. Ich leite eine Digitalagentur, die internationale Kunden — darunter LiteSpeed Technologies und QUIC.cloud — bei Webentwicklung, Branding, Marktpositionierung, Preisstrategie und Cloud-Lösungen unterstützt. 12+ Jahre Erfahrung im Aufbau und der Skalierung von Unternehmen in Europa und Asien, mit einer Kombination aus strategischem Marketing und hands-on technischer Umsetzung. Als Gründer von HostSalt seit 2021 konzipiere und betreibe ich zusätzlich vollständig verwaltete Hosting-Infrastruktur für Agenturen, E-Commerce-Unternehmen und Entwickler. Zuvor leitete ich internationale Marketingteams in Shanghai für Strichpunkt Design, Axus Stationery (einer der weltweit größten Bleistiftproduzenten, Lieferant von Faber-Castell/Maped/BIC) und Neobear (Qualcomm/ZTE-gefördertes AR-Spielzeug). Dreisprachig: Deutsch muttersprachlich, Englisch verhandlungssicher, Wirtschaftsmandarin; konversationssicher in Portugiesisch und Niederländisch. Mit nachweislicher Erfolgsbilanz bei der Übersetzung komplexer digitaler Herausforderungen in messbares Wachstum über 4 Kontinente und 12+ internationale Märkte.",
+  "summary_en": "Founder and CEO of Bold and Digital LLC since 2020, leading a digital agency that helps international clients — including LiteSpeed Technologies and QUIC.cloud — sharpen their digital presence through tailored web development, branding, market positioning, pricing strategy, and cloud solutions. 12+ years building and scaling businesses in Europe and Asia, combining strategic marketing with hands-on technical execution. As founder of HostSalt since 2021, I also design and operate fully managed hosting infrastructure for agencies, e-commerce businesses, and developers. Previously led international marketing teams in Shanghai (China) for Strichpunkt Design, Axus Stationery (one of the world's largest pencil producers, supplying Faber-Castell/Maped/BIC) and Neobear (Qualcomm/ZTE-backed AR-for-kids). Languages: German C2, English C2, conversational Mandarin from 6 years in Shanghai, plus beginner Portuguese and Dutch. Track record of turning complex digital challenges into measurable growth across 4 continents and 12+ international markets.",
+  "summary_de": "Gründer und CEO der Bold and Digital LLC seit 2020. Ich leite eine Digitalagentur, die internationale Kunden — darunter LiteSpeed Technologies und QUIC.cloud — bei Webentwicklung, Branding, Marktpositionierung, Preisstrategie und Cloud-Lösungen unterstützt. 12+ Jahre Erfahrung im Aufbau und der Skalierung von Unternehmen in Europa und Asien, mit einer Kombination aus strategischem Marketing und hands-on technischer Umsetzung. Als Gründer von HostSalt seit 2021 konzipiere und betreibe ich zusätzlich vollständig verwaltete Hosting-Infrastruktur für Agenturen, E-Commerce-Unternehmen und Entwickler. Zuvor leitete ich internationale Marketingteams in Shanghai (China) für Strichpunkt Design, Axus Stationery (einer der weltweit größten Bleistiftproduzenten, Lieferant von Faber-Castell/Maped/BIC) und Neobear (Qualcomm/ZTE-gefördertes AR-Spielzeug). Sprachen: Deutsch C2, Englisch C2, Konversationsmandarin aus 6 Jahren Shanghai, Portugiesisch und Niederländisch auf Anfängerniveau. Mit nachweislicher Erfolgsbilanz bei der Übersetzung komplexer digitaler Herausforderungen in messbares Wachstum über 4 Kontinente und 12+ internationale Märkte.",
   "experience": [
     {
       "period": "2020-06 → present",
@@ -166,7 +166,7 @@
       "B2B Sales Funnels, Conversion-Optimierung & KPI-Steuerung (ROAS 3-6x)",
       "Performance Optimisation (Core Web Vitals, LCP <2.0s, TTFB -40%)",
       "SEO, SEM & Analytics (Google Analytics + Google Ads certified)",
-      "Multilingual Communications: DE (native), EN (C2), ZH (business Mandarin), PT, NL",
+      "Multilingual Communications: DE (C2), EN (C2), ZH (conversational, 6y Shanghai), PT (A1), NL (A1)",
       "Adobe Creative Suite (Photoshop, Illustrator, InDesign — 90%+ pass rate teaching)",
       "Public Relations & Stakeholder Management (diplomatic + corporate)",
       "Trade Fair & Event Organisation (CES 100k+, Spielwarenmesse 60k+, IAA-scale)",
@@ -182,7 +182,7 @@
       "B2B-Vertriebs-Trichter, Conversion-Optimierung & KPI-Steuerung (ROAS 3-6x)",
       "Performance-Optimierung (Core Web Vitals, LCP <2,0s, TTFB -40%)",
       "SEO, SEM & Analytics (Google Analytics + Google Ads zertifiziert)",
-      "Mehrsprachige Kommunikation: DE (Muttersprache), EN (C2), ZH (Wirtschaftsmandarin), PT, NL",
+      "Mehrsprachige Kommunikation: DE (C2), EN (C2), ZH (Konversation, 6 Jahre Shanghai), PT (A1), NL (A1)",
       "Adobe Creative Suite (Photoshop, Illustrator, InDesign — 90 %+ Bestehensquote in der Lehre)",
       "Public Relations & Stakeholder-Management (diplomatisch + korporativ)",
       "Messe- & Event-Organisation (CES 100k+, Spielwarenmesse 60k+, IAA-Skala)",
@@ -190,11 +190,11 @@
     ]
   },
   "languages": [
-    {"lang_en": "German", "lang_de": "Deutsch", "level": "Native / Muttersprache (C2)"},
-    {"lang_en": "English", "lang_de": "Englisch", "level": "Full Professional / Verhandlungssicher (C2)"},
-    {"lang_en": "Mandarin Chinese", "lang_de": "Mandarin (Chinesisch)", "level": "Business Proficiency / Wirtschaftsmandarin (B2)"},
-    {"lang_en": "Portuguese", "lang_de": "Portugiesisch", "level": "Conversational / Konversationssicher (B1)"},
-    {"lang_en": "Dutch", "lang_de": "Niederländisch", "level": "Conversational / Konversationssicher (B1)"}
+    {"lang_en": "German", "lang_de": "Deutsch", "level": "C2 — Full Proficiency"},
+    {"lang_en": "English", "lang_de": "Englisch", "level": "C2 — Full Proficiency"},
+    {"lang_en": "Mandarin Chinese", "lang_de": "Mandarin (Chinesisch)", "level": "_(level not specified — Ye to confirm — likely B1-B2 from 6 years in Shanghai)_"},
+    {"lang_en": "Portuguese", "lang_de": "Portugiesisch", "level": "A1 — Beginner"},
+    {"lang_en": "Dutch", "lang_de": "Niederländisch", "level": "A1 — Beginner"}
   ],
   "certifications": [
     "Google Analytics Certification",
