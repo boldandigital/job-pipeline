@@ -28,6 +28,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import sqlite3
 import sys
 import time
@@ -333,6 +334,38 @@ def _render_documents(
 
     cv_path = ""
     cover_path = ""
+
+    # ADOPT-MAIL-3: Also copy the headshot as a separate file (many ATS portals
+    # strip embedded photos from PDFs but accept profile-picture uploads).
+    # Photo source priority: config/photo.jpg > PHOTO_PATH env > skip.
+    try:
+        photo_src = Path(os.getenv("PHOTO_PATH") or _PROJECT_ROOT / "config" / "photo.jpg")
+        if photo_src.exists():
+            photo_dst = job_dir / "photo.jpg"
+            shutil.copyfile(photo_src, photo_dst)
+            log.info("copied photo to %s", photo_dst)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("photo copy failed (non-fatal): %s", exc)
+
+    # Generate MANIFEST.md with submission instructions for ATS adapters.
+    try:
+        job_id = job.get("id", "?")
+        title = job.get("title", "?")
+        company = job.get("company", "?")
+        manifest = (
+            f"Submission Manifest — Job {job_id}: {title} @ {company}\n"
+            f"Generated: {datetime.now(timezone.utc).isoformat(timespec='seconds')} UTC\n\n"
+            "ATS upload order:\n"
+            "  1. photo.jpg — profile picture (upload FIRST)\n"
+            "  2. cv.html + anschreiben.html — paste content into form fields\n"
+            "     OR convert to PDF for file upload\n"
+            "  3. Watch for captcha / SSO walls → adapter pauses for review\n\n"
+            f"Job URL: {job.get('url', '?')}\n"
+            f"ATS type: {job.get('ats_type') or 'generic'}\n"
+        )
+        (job_dir / "MANIFEST.md").write_text(manifest, encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("manifest write failed (non-fatal): %s", exc)
     try:
         cv_html = ats_templates.render_cv_classic(ctx=personal)  # type: ignore[arg-type]
         cv_path = str(job_dir / "cv.html")
