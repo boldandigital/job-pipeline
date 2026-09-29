@@ -171,7 +171,7 @@ def build_html(tagline, language="en", order=None):
     """Build the CV HTML document."""
     lang = language.lower()
     if order is None:
-        order = ["summary", "experience", "education", "skills"]
+        order = ["summary", "experience", "education", "certifications", "skills"]
 
     photo_b64 = ""
     if os.path.exists(PHOTO_PATH):
@@ -226,6 +226,15 @@ def build_html(tagline, language="en", order=None):
                     <div class="entry-role">{edu.get("university", "")}</div>
                 </div>"""
             sections.append(html)
+
+        elif section == "certifications":
+            certs = CV_DATA.get("certifications", [])
+            if certs:
+                html = f'<h2>{"Zertifikate" if lang == "de" else "Certifications"}</h2><ul>'
+                for cert in certs:
+                    html += f'<li>{cert}</li>'
+                html += "</ul>"
+                sections.append(html)
 
         elif section == "skills":
             skills = SKILLS.get(lang, SKILLS.get("en", []))
@@ -296,7 +305,7 @@ def main():
     parser.add_argument("--company", required=True, help="Company name for filename")
     parser.add_argument("--tagline", default="AI & Automation Specialist", help="Tagline under name")
     parser.add_argument("--language", default="en", choices=["en", "de"], help="Language")
-    parser.add_argument("--order", default="summary,experience,education,skills",
+    parser.add_argument("--order", default="summary,experience,education,certifications,skills",
                         help="Section order (comma-separated)")
     parser.add_argument("--output", default=None, help="Output PDF path")
     args = parser.parse_args()
