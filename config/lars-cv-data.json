@@ -192,7 +192,7 @@
   "languages": [
     {"lang_en": "German", "lang_de": "Deutsch", "level": "C2 — Full Proficiency"},
     {"lang_en": "English", "lang_de": "Englisch", "level": "C2 — Full Proficiency"},
-    {"lang_en": "Mandarin Chinese", "lang_de": "Mandarin (Chinesisch)", "level": "_(level not specified — Ye to confirm — likely B1-B2 from 6 years in Shanghai)_"},
+    {"lang_en": "Mandarin Chinese", "lang_de": "Mandarin (Chinesisch)", "level": ""},
     {"lang_en": "Portuguese", "lang_de": "Portugiesisch", "level": "A1 — Beginner"},
     {"lang_en": "Dutch", "lang_de": "Niederländisch", "level": "A1 — Beginner"}
   ],

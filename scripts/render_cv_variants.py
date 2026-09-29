@@ -112,6 +112,7 @@ def build_cv_context(job: dict, profile: dict) -> dict:
         "certifications_block": (
             f"<ul class='certs'>{certs_li}</ul>" if certs_li else ""
         ),
+        "certifications_li": certs_li,
         "languages_heading": label_lang,
         "languages_li": langs_li,
         # Structured data tokens (modern v1 only)
@@ -186,6 +187,7 @@ def main():
     templates = {
         "modern": _PROJECT_ROOT / "templates" / "cv-modern-v1.html",
         "classic": _PROJECT_ROOT / "templates" / "cv-classic.html",
+        "bold": _PROJECT_ROOT / "templates" / "cv-bold.html",
         "legacy": _PROJECT_ROOT / "templates" / "cv-classic-v2.html",
     }
 

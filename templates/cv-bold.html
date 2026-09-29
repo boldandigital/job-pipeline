@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<!--
+  CV Template: cv-bold.html
+  Purpose: Brand-quality, ATS-safe, machine-readable + visually distinctive.
+  Taste dials: Variance 4, Motion 1 (static — print-safe), Density 2
+
+  Design:
+  - Asymmetric header: huge name + side-stacked contact (Linear/Vercel style)
+  - Single accent color (deep navy #0A2540), no gradients
+  - Photo as bold geometric frame (rounded-square, 120x150)
+  - Tight type scale (12pt base, 32pt name, 11pt h2)
+  - Generous whitespace with bold horizontal rules
+  - Section markers as left-rules with uppercase "NAVIGATOR" labels
+  - All semantic HTML5 + ARIA landmarks (ATS-safe)
+
+  ATS: single-column, no tables, no floats, no absolute positioning
+       outside the header. Uses <h1>, <h2>, <h3>, <article>, <section>.
+       Photo has descriptive alt. JSON-LD included.
+-->
+<html lang="{{lang}}">
+<head>
+  <meta charset="UTF-8">
+  <title>{{name}} — {{position_title}}</title>
+  <meta name="description" content="{{name}} — {{summary_short}}">
+  <meta name="keywords" content="{{keywords_csv}}">
+  <meta property="og:title" content="{{name}} — {{position_title}}">
+  <meta property="og:description" content="{{summary_short}}">
+  <meta property="og:image" content="{{photo_url}}">
+  <link rel="icon" type="image/jpeg" href="{{photo_url}}">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": "{{name}}",
+    "jobTitle": "{{position_title}}",
+    "email": "{{email}}",
+    "url": "{{linkedin_url}}",
+    "image": "{{photo_url}}",
+    "address": {"@type": "PostalAddress", "addressLocality": "{{location}}"},
+    "knowsLanguage": {{languages_jsonld}}
+  }
+  </script>
+
+  <style>
+    /* === Bold-but-ATS-safe === */
+    :root {
+      --accent: #0A2540;
+      --rule:  #0A2540;
+      --text:  #1a1a1a;
+      --muted: #6b7280;
+      --soft:  #f6f8fa;
+    }
+    * { box-sizing: border-box; }
+    html { font-size: 11pt; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Inter, Arial, sans-serif;
+      line-height: 1.55;
+      color: var(--text);
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 36px 44px 32px;
+      background: #fff;
+      font-feature-settings: "ss01", "cv11";
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* === HEADER === */
+    .header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 28px;
+      align-items: end;
+      padding-bottom: 18px;
+      border-bottom: 3px solid var(--accent);
+    }
+    h1 {
+      font-size: 38pt;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin: 0 0 8px;
+      color: var(--accent);
+    }
+    .tagline {
+      font-size: 11.5pt;
+      color: var(--text);
+      font-weight: 500;
+      margin: 0 0 14px;
+    }
+    .contact {
+      font-size: 9.5pt;
+      color: var(--muted);
+      line-height: 1.7;
+      font-variant-numeric: tabular-nums;
+    }
+    .contact a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+    .contact a:hover { border-bottom-color: var(--accent); }
+    .photo {
+      width: 120px;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid #e5e7eb;
+    }
+
+    /* === SECTIONS === */
+    section {
+      margin-top: 22px;
+    }
+    h2 {
+      font-size: 10.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      margin: 0 0 12px;
+      padding: 6px 0 6px 14px;
+      border-left: 4px solid var(--accent);
+      color: var(--accent);
+      background: linear-gradient(to right, rgba(10,37,64,0.04), transparent 60%);
+    }
+    h3 {
+      font-size: 12.5pt;
+      font-weight: 700;
+      margin: 14px 0 1px;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    h4 {
+      font-size: 11pt;
+      font-weight: 600;
+      margin: 2px 0 0;
+      color: var(--accent);
+    }
+
+    .summary {
+      font-size: 11.5pt;
+      line-height: 1.65;
+      margin: 4px 0 0;
+      max-width: 64ch;
+    }
+
+    /* === EXPERIENCE BLOCKS === */
+    .exp-block {
+      margin-bottom: 14px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .exp-block:last-child { border-bottom: 0; }
+    .exp-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 4px 14px;
+    }
+    .exp-meta {
+      color: var(--muted);
+      font-size: 10pt;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+    .exp-role {
+      color: var(--muted);
+      font-style: normal;
+      font-size: 10.5pt;
+      margin: 2px 0 6px;
+    }
+
+    ul {
+      margin: 6px 0 0;
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 3px;
+      line-height: 1.55;
+      padding-left: 4px;
+    }
+    li::marker { color: var(--accent); }
+
+    /* === SKILLS & LANGS GRID === */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px 24px;
+      list-style: none;
+      padding: 0;
+      margin: 4px 0;
+    }
+    .grid li {
+      padding: 6px 0 6px 14px;
+      border-bottom: 1px dotted #e5e7eb;
+      font-size: 10.5pt;
+      position: relative;
+    }
+    .grid li::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      position: absolute;
+      left: 0;
+      top: 12px;
+    }
+    .grid li::marker { content: ""; }
+
+    .certs { list-style: none; padding: 0; margin: 4px 0; }
+    .certs li {
+      padding: 8px 0 8px 28px;
+      border-bottom: 1px dotted #e5e7eb;
+      position: relative;
+      font-size: 10.5pt;
+    }
+    .certs li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      top: 8px;
+      width: 20px;
+      height: 20px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      font-size: 11pt;
+      line-height: 20px;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    @page {
+      size: A4;
+      margin: 16mm 16mm;
+    }
+    @media print {
+      body { padding: 0; margin: 0; max-width: 100%; }
+      h2 { background: none; }
+      .exp-block { page-break-inside: avoid; }
+    }
+    @media (max-width: 600px) {
+      .header { grid-template-columns: 1fr; }
+      .photo { width: 100px; height: 125px; }
+      h1 { font-size: 28pt; }
+    }
+  </style>
+</head>
+<body itemscope itemtype="https://schema.org/Person">
+
+  <main>
+
+    <header class="header">
+      <div>
+        <h1 itemprop="name">{{name}}</h1>
+        <div class="tagline" itemprop="jobTitle">{{position_title}}</div>
+        <div class="contact">
+          <div itemprop="address" itemscope itemtype="https://schema.org/PostalAddress">
+            <span itemprop="addressLocality">{{location}}</span>
+          </div>
+          <div><a href="mailto:{{email}}" itemprop="email">{{email}}</a></div>
+          <div><a href="{{linkedin_url}}" rel="me">{{linkedin_short}}</a></div>
+        </div>
+      </div>
+      <img class="photo"
+           src="{{photo_url}}"
+           alt="Professional headshot of {{name}}, founder and CEO"
+           itemprop="image"
+           width="120" height="150">
+    </header>
+
+    <section aria-labelledby="summary-h">
+      <h2 id="summary-h">{{summary_heading}}</h2>
+      <p class="summary" itemprop="description">{{summary}}</p>
+    </section>
+
+    <section aria-labelledby="exp-h">
+      <h2 id="exp-h">{{experience_heading}}</h2>
+      {{experience_blocks}}
+    </section>
+
+    <section aria-labelledby="edu-h">
+      <h2 id="edu-h">{{education_heading}}</h2>
+      {{education_blocks}}
+    </section>
+
+    <section aria-labelledby="cert-h">
+      <h2 id="cert-h">{{certifications_heading}}</h2>
+      <ul class="certs">{{certifications_li}}</ul>
+    </section>
+
+    <section aria-labelledby="skills-h">
+      <h2 id="skills-h">{{skills_heading}}</h2>
+      <ul class="grid">{{skills_li}}</ul>
+    </section>
+
+    <section aria-labelledby="lang-h">
+      <h2 id="lang-h">{{languages_heading}}</h2>
+      <ul class="grid">{{languages_li}}</ul>
+    </section>
+
+  </main>
+
+</body>
+</html>
