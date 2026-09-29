@@ -45,7 +45,7 @@ def _load_cv_data() -> dict:
 CV_DATA = _load_cv_data()
 PERSONAL = CV_DATA["personal"]
 
-PHOTO_PATH = os.getenv("PHOTO_PATH", "./config/photo.png")
+PHOTO_PATH = os.getenv("PHOTO_PATH", str(_PROJECT_ROOT / "config" / "photo.jpg"))
 
 # ============================================================================
 # EXPERIENCE DATA — customize in config/cv_data.json or override below
