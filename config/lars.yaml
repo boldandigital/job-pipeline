@@ -7,8 +7,8 @@
 # ║           Targeting Founder / CTO / Head-of-Digital / VP Eng.                 ║
 # ║                                                                              ║
 # ║  Geography: DACH (DE/AT/CH) + Benelux (BE/NL/LU) + global remote.            ║
-# ║  Salary floor: €60,000 (Ye realistic expectation 2026-09-30 — adjust as ye     ║
-# ║  close roles and adjust scoring toward higher brackets).                  ║
+# ║  Salary floor: €65,000 (Ye target 2026-09-30 — Senior IC band)     ║
+# ║  Target range: €65k-€75k (realistic Senior IC band 2026-09-30)  ║
 # ║  Seniority: exclude Werkstudent/Junior/Intern only; INCLUDE Senior,         ║
 # ║             Lead, Head, Director, VP, C-Level, Founder.                     ║
 # ╚═══════════════════════════════════════════════════════════════════════════════╝
@@ -359,7 +359,7 @@ scoring:
     unlimited_pto: 40
 
     # ── COMPENSATION ───────────────────────────────────────
-    salary_above_target: 100        # Ye's floor is €60k, target range €60-80k
+    salary_above_target: 100        # Ye's floor €65k, target €65-75k IC band
     equity_options: 60
     founder_equity_split: 120       # extra boost if role offers founder-style equity
 
