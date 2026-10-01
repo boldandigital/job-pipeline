@@ -77,7 +77,6 @@ def build_anschreiben_context(job: dict, profile: dict) -> dict:
         track = "hosting_infra"
     else:
         track = "generic"
-
     # Load WHY-YOU from YAML
     why_you_para = ""
     try:
