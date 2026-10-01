@@ -145,7 +145,7 @@ def html_to_pdf(html: str, output_path: Path) -> None:
     import re
     import base64
     import tempfile
-    from patchright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright
 
     # Inline any <img src="config/photo.jpg"> or similar relative paths
     def _inline_local_img(match):
@@ -169,7 +169,11 @@ def html_to_pdf(html: str, output_path: Path) -> None:
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True, args=["--no-sandbox"])
+            browser = pw.chromium.launch(
+                headless=True, 
+                args=["--no-sandbox"],
+                executable_path="/Users/lars/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+            )
             page = browser.new_page()
             page.goto(f"file://{tmp_path}", wait_until="networkidle")
             page.pdf(path=str(output_path), format="A4", print_background=True)
