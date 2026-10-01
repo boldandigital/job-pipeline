@@ -98,6 +98,8 @@ def build_cv_context(job: dict, profile: dict) -> dict:
         "phone": personal.get("phone", ""),
         "linkedin_url": personal.get("linkedin", ""),
         "linkedin_short": personal.get("linkedin", "").replace("https://", ""),
+        "github_url": personal.get("github", ""),
+        "github_short": personal.get("github", "").replace("https://", ""),
         "photo_url": photo_url,
         "summary_heading": label_summary,
         "summary": summary,
@@ -182,6 +184,11 @@ def main():
     parser.add_argument("--job-id", type=int, required=True)
     parser.add_argument("--lang", choices=["en", "de"], default="de")
     parser.add_argument("--slug", required=True, help="Batch dir name (e.g. picard-b2b-ecom)")
+    parser.add_argument("--template", choices=["modern", "classic", "bold", "legacy", "all"],
+                        default="all",
+                        help="Which CV template to render (default: all)")
+    parser.add_argument("--letters", action="store_true",
+                        help="Also render Anschreiben + Motivationsschreiben in BOLD style")
     args = parser.parse_args()
 
     templates = {
@@ -190,6 +197,8 @@ def main():
         "bold": _PROJECT_ROOT / "templates" / "cv-bold.html",
         "legacy": _PROJECT_ROOT / "templates" / "cv-classic-v2.html",
     }
+    if args.template != "all":
+        templates = {args.template: templates[args.template]}
 
     out_dir = _PROJECT_ROOT / "data" / "batches" / args.slug
     out_dir.mkdir(parents=True, exist_ok=True)
