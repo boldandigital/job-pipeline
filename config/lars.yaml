@@ -7,7 +7,8 @@
 # ║           Targeting Founder / CTO / Head-of-Digital / VP Eng.                 ║
 # ║                                                                              ║
 # ║  Geography: DACH (DE/AT/CH) + Benelux (BE/NL/LU) + global remote.            ║
-# ║  Salary floor: €80,000 (Lars's hard minimum — see candidate_profile.md).     ║
+# ║  Salary floor: €60,000 (Ye realistic expectation 2026-09-30 — adjust as ye     ║
+# ║  close roles and adjust scoring toward higher brackets).                  ║
 # ║  Seniority: exclude Werkstudent/Junior/Intern only; INCLUDE Senior,         ║
 # ║             Lead, Head, Director, VP, C-Level, Founder.                     ║
 # ╚═══════════════════════════════════════════════════════════════════════════════╝
@@ -358,7 +359,7 @@ scoring:
     unlimited_pto: 40
 
     # ── COMPENSATION ───────────────────────────────────────
-    salary_above_target: 100        # Lars's floor is €80k
+    salary_above_target: 100        # Ye's floor is €60k, target range €60-80k
     equity_options: 60
     founder_equity_split: 120       # extra boost if role offers founder-style equity
 
