@@ -14,6 +14,23 @@
   "summary_de": "Gründer und CEO der Bold and Digital LLC seit 2020. Ich leite eine Digitalagentur, die internationale Kunden — darunter LiteSpeed Technologies und QUIC.cloud — bei Webentwicklung, Branding, Marktpositionierung, Preisstrategie und Cloud-Lösungen unterstützt. 12+ Jahre Erfahrung im Aufbau und der Skalierung von Unternehmen in Europa und Asien, mit einer Kombination aus strategislem Marketing und hands-on technischer Umsetzung. Als Gründer von HostSalt seit 2021 konzipiere und betreibe ich zusätzlich vollständig verwaltete Hosting-Infrastruktur für Agenturen, E-Commerce-Unternehmen und Entwickler. Zuvor leitete ich internationale Marketingteams in Shanghai (China) für Strichpunkt Design, Axus Stationery (einer der weltweit größten Bleistiftproduzenten, Lieferant von Faber-Castell/Maped/BIC) und Neobear (Qualcomm/ZTE-gefördertes AR-Spielzeug). Sprachen: Deutsch C2, Englisch C2, Portugiesisch und Niederländisch auf Anfängerniveau. Mit nachweistlicher Erfolgsbilanz bei der Übersetzung komplexer digitaler Herausforderungen in messbares Wachstum über 4 Kontinente und 12+ internationale Märkte.",
   "experience": [
     {
+      "period": "2019-10 → 2020-06",
+      "company": "Relocation & Strategic Setup",
+      "location": "Aarschot, Flemish Region, Belgium",
+      "role_en": "Founder Setup Phase — Strategic Relocation DACH → Benelux",
+      "role_de": "Gründer-Setup-Phase — Strategische Umsiedlung DACH → Benelux",
+      "bullets_en": [
+        "Relocated from Shanghai (China) to Belgium after 8 years in APAC, completing legal residency registration and EU business entity formation for upcoming HostSalt and BoldandDigital launches.",
+        "Conducted 20+ market-research interviews with potential clients and partners across DACH and Benelux, identifying the agency-services gap in the region.",
+        "Built initial cloud infrastructure prototypes for HostSalt on AWS (WordPress + WooCommerce stacks), laying the foundation for the 500+ site managed-hosting portfolio launched in mid-2020."
+      ],
+      "bullets_de": [
+        "Umsiedlung von Shanghai (China) nach Belgien nach 8 Jahren in APAC — abgeschlossene Aufenthaltsregistrierung und EU-Geschäftskörpergründung für die bevorstehenden Launches von HostSalt und BoldandDigital.",
+        "Durchführung von 20+ Marktforschungsinterviews mit potenziellen Kunden und Partnern in DACH und Benelux zur Identifizierung der Agentur-Dienstleistungslücke.",
+        "Aufbau erster Cloud-Infrastrukturprototypen für HostSalt auf AWS (WordPress- + WooCommerce-Stacks) als Grundlage für das Mitte 2020 gestartete Managed-Hosting-Portfolio mit 500+ Sites."
+      ]
+    },
+    {
       "period": "2020-06 → present",
       "company": "Bold and Digital LLC",
       "location": "Leuven, Flemish Region, Belgium",
@@ -141,8 +158,8 @@
       "period": "2011-01 → 2013-01",
       "company": "Universität Passau",
       "location": "Passau, Bavaria, Germany",
-      "role_en": "Lecturer (Docent), Photography & Design",
-      "role_de": "Dozent, Fotografie & Design",
+      "role_en": "Lecturer (HiWi Research Assistant), Photography & Design",
+      "role_de": "Dozent (HiWi Wissenschaftliche / Forschungsassistent), Fotografie & Design",
       "bullets_en": [
         "Delivered 4 semesters of design and visual communication courses to 80+ students at the University of Passau.",
         "Trained students across the Adobe Creative Suite (Photoshop, Illustrator, InDesign), with 90%+ passing rate across cohorts.",
