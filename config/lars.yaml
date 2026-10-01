@@ -105,17 +105,34 @@ parallel:
 # via the XING branch of run_scrapers() (--source xing).
 # ============================================================
 xing_queries:
+  # ─── DIGITAL CONSULTING LANE (Ye priority 1, 2026-09-30) ───
   - "digital consultant"              # EN: IC + agency-side roles
   - "digital beratung"                # DE: explicit "Digitalberatung" wording
   - "digital strategist"              # EN: strategy + consulting
+  - "digital strategy"                # EN: strategy lane
+  - "digital transformation"          # EN/DE hybrid
+  # ─── E-COMMERCE LANE ───
   - "ecommerce manager"               # EN: matches PICARD test
   - "e-commerce manager"              # DE-style variant
+  - "e-commerce berater"              # DE: e-com consulting
+  - "onlinehandel"                    # DE: explicit online retail
+  # ─── MARKETING LANE ───
   - "performance marketing"           # EN: marketing lane
   - "marketing manager digital"       # EN/DE hybrid
+  - "marketing leiter"                # DE: marketing lead
+  - "marketing director"              # EN/DE hybrid
+  # ─── LEADERSHIP / FOUNDER LANE ───
   - "digital contractor"              # EN: freelance / project
   - "freelance digital"               # EN: 1099 / IC
   - "co-founder digital"              # EN: equity track
-  - "co-founder ecommerce"               # MD (Geschäftsführer) for higher DACH recall
+  - "co-founder ecommerce"
+  - "geschäftsführer digital"         # DE: MD digital
+  - "head of digital"                 # EN/DE
+  # ─── AGENCY / HOSTING LANE ───
+  - "agentur"                        # warehouse agency
+  - "agency director"                 # EN
+  - "hosting manager"                 # EN/DE
+  - "devops lead"                     # EN
 
 xing_location: "Rhein-Main"          # Cologne / Düsseldorf / Frankfurt region default
 queries:
@@ -143,6 +160,9 @@ queries:
     - "Go-to-Market Consultant"
     - "GTM Consultant"
     - "Salesforce Consultant"
+    - "Onlinehandel Consultant"
+    - "GTM Consultant"
+    - "Salesforce Consultant"
 
   # ─────────────────────────────────────────────────────────
   # PRIORITY 2 — Senior management track (wider net)
@@ -163,6 +183,84 @@ queries:
     - "Director of Engineering"
     - "Director of Technology"
     - "Director of Digital"
+
+  # ─────────────────────────────────────────────────────────
+  # PRIORITY 2B — Marketing / Sales / Business Development (Lars's CV lanes)
+  # ─────────────────────────────────────────────────────────
+  marketing_sales_bd:
+    - "Marketing Manager"
+    - "Senior Marketing Manager"
+    - "Marketing Director"
+    - "Head of Marketing"
+    - "VP Marketing"
+    - "Marketing Leiter"
+    - "Performance Marketing Manager"
+    - "Performance Marketing Lead"
+    - "Digital Marketing Manager"
+    - "Digital Marketing Director"
+    - "Growth Marketing Manager"
+    - "Growth Manager"
+    - "Demand Generation Manager"
+    - "SEO Manager"
+    - "SEM Manager"
+    - "SEA Manager"
+    - "Content Marketing Manager"
+    - "Brand Manager"
+    - "Brand Marketing Manager"
+    - "Communications Manager"
+    - "PR Manager"
+    - "Public Relations Manager"
+    - "Sales Manager"
+    - "Senior Sales Manager"
+    - "Sales Director"
+    - "Head of Sales"
+    - "VP Sales"
+    - "Business Development Manager"
+    - "Business Development Director"
+    - "Head of Business Development"
+    - "BD Manager"
+    - "Partnerships Manager"
+    - "Head of Partnerships"
+    - "Account Director"
+    - "Key Account Manager"
+    - "Senior Account Manager"
+    - "Strategic Account Manager"
+    - "Enterprise Account Manager"
+    - "Vertriebsleiter"
+    - "Vertriebsdirektor"
+    - "Leiter Vertrieb"
+    - "Verkaufsleiter"
+    - "Geschäftsentwicklung"
+
+  # ─────────────────────────────────────────────────────────
+  # PRIORITY 2C — International / Trade / China-experienced lanes
+  # ─────────────────────────────────────────────────────────
+  international_trade:
+    - "International Business Development"
+    - "International Sales Manager"
+    - "Export Manager"
+    - "Export Sales"
+    - "Country Manager"
+    - "Regional Manager"
+    - "APAC Manager"
+    - "DACH Manager"
+    - "Benelux Manager"
+    - "EU Sales Manager"
+    - "European Sales Manager"
+    - "International Marketing Manager"
+    - "Global Marketing Manager"
+    - "Cross-border Commerce"
+    - "Trade Fair Manager"
+    - "Messe Manager"
+    - "Trade Marketing"
+    - "OEM Manager"
+    - "ODM Manager"
+    - "Channel Manager"
+    - "Channel Sales Manager"
+    - "Distribution Manager"
+    - "Market Entry"
+    - "Markteintritt"
+    - "Markterschließung"
 
   # ─────────────────────────────────────────────────────────
   # PRIORITY 3 — Agency / Hosting / Branding niche (Lars's proven lane)
@@ -232,6 +330,8 @@ scoring:
     mid_role: 90                    # NEW: matches Ye's mid+senior+C-level scope
     digital_consultant: 220         # NEW: highest weight — Ye's #1 lane 2026-09-30
     contractor: 110                 # NEW: matches IC / freelance lanes
+    marketing_sales_bd: 180         # NEW: matches Ye's marketing/sales/BD CV lanes
+    international: 160              # NEW: matches Ye's 6y Shanghai + trade fair lanes
 
     # ── DOMAIN FIT (Lars's actual skill set) ───────────────
     # Boost categories that map directly to his CV
@@ -434,6 +534,12 @@ scoring:
       - "go-to-market"
       - "pricing strategist"
       - "marketing manager"
+      - "marketing leiter"
+      - "sales manager"
+      - "sales director"
+      - "business development"
+      - "key account"
+      - "account director"
 
     # Contractor / freelance (NEW: Ye also wants IC lanes)
     contractor:
@@ -444,6 +550,28 @@ scoring:
       - "interim"
       - "project-based"
       - "auftragnehmer"
+      - "selbständig"
+
+    # International / Trade / China-experience (matches Ye's Shanghai years)
+    international:
+      - "international"
+      - "export"
+      - "country manager"
+      - "regional manager"
+      - "apac"
+      - "dach"
+      - "benelux"
+      - "channel manager"
+      - "trade fair"
+      - "messe"
+      - "trade marketing"
+      - "oem"
+      - "odm"
+      - "markteintritt"
+      - "markterschließung"
+      - "china"
+      - "shanghai"
+      - "asia pacific"
 
     # DOMAIN FIT ───────────────────────────────────────────
     web_hosting:
