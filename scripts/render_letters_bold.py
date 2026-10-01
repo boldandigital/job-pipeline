@@ -36,29 +36,57 @@ def _today_en() -> str:
 def build_anschreiben_context(job: dict, profile: dict) -> dict:
     """Build the token context for the Anschreiben BOLD template.
 
-    The body paragraphs are tailored to PICARD: B2B e-commerce + sales role.
-    For other jobs, swap with LLM-generated body paragraphs.
+    The WHY-YOU paragraph is tailored per job via 4-track YAML selection
+    (founder_cto / agency_strategy / hosting_infra / generic) loaded
+    from config/why-you-paragraphs.yaml. Falls back to generic if the
+    track is missing.
     """
     import sqlite3
     db = sqlite3.connect(str(_PROJECT_ROOT / "data" / "jobs.db"))
     db.row_factory = sqlite3.Row
     row = db.execute(
-        "SELECT title, company, url FROM jobs WHERE id = ?",
+        "SELECT title, company, location, url, description FROM jobs WHERE id = ?",
         (job["id"],),
     ).fetchone()
     db.close()
+
     if row:
         company = row["company"]
         role = row["title"]
+        location = row["location"] or "Deutschland"
         recipient_name = "die Personalverantwortlichen" if profile["lang"] == "de" else "Hiring Manager"
+        job_desc = row["description"] or ""
     else:
         company = profile.get("company", "Ihr Unternehmen")
         role = profile.get("role", "die ausgeschriebene Position")
+        location = profile.get("location", "Deutschland")
         recipient_name = "die Personalverantwortlichen" if profile["lang"] == "de" else "Hiring Manager"
+        job_desc = ""
 
     cv_data = json.loads((_PROJECT_ROOT / "config" / "lars-cv-data.json").read_text())
     personal = cv_data["personal"]
     photo_url = personal.get("photo_path", "") or "config/photo.jpg"
+
+    # Track detection: pick WHY-YOU paragraph based on role/title keywords
+    role_lower = (role + " " + job_desc[:500]).lower()
+    if any(kw in role_lower for kw in ["cto", "chief", "founder", "coo", "head of"]):
+        track = "founder_cto"
+    elif any(kw in role_lower for kw in ["marketing", "marketer", "brand", "content", "growth"]):
+        track = "agency_strategy"
+    elif any(kw in role_lower for kw in ["hosting", "devops", "infrastructure", "platform", "cloud", "engineer"]):
+        track = "hosting_infra"
+    else:
+        track = "generic"
+
+    # Load WHY-YOU from YAML
+    why_you_para = ""
+    try:
+        from src.generation.ats_templates import load_why_you_paragraphs, pick_why_you_track
+        paragraphs = load_why_you_paragraphs()
+        variant = track.replace("_", "")  # variant is e.g. "foundercto"
+        why_you_para = pick_why_you_track(variant, profile["lang"], paragraphs, role, job_desc)
+    except Exception:
+        why_you_para = ""
 
     if profile["lang"] == "de":
         date_str = _today_de()
@@ -82,65 +110,61 @@ def build_anschreiben_context(job: dict, profile: dict) -> dict:
             "500+ gehosteten Sites, 99,9% Verfügbarkeit und einer LCP-Verbesserung "
             "von median 35-50% pro optimierter Site."
         )
-        why_you_paragraph = (
-            f"Was {company} besonders macht, ist die Verbindung von industrieller "
-            "Tradition mit digitalem Wachstum — eine Dynamik, die ich aus meiner "
-            "Tätigkeit für Axus Stationery (Lieferant von Faber-Castell, Maped, BIC) "
-            "und Neobear (Qualcomm-/ZTE-backed) kenne. Ich habe in beiden Fällen "
-            "OEM-zu-ODM-Übergänge orchestriert, Amazon-Portfolios von 50+ Listings "
-            "skaliert und ROAS-Werte von 4-6x erreicht. Diese Erfahrung in der "
-            "Schnittstelle zwischen Handel und digitaler Wertschöpfung passt "
-            "präzise zu Ihrem Fokus auf B2B-E-Commerce."
+        why_you_paragraph = why_you_para or (
+            f"Was {company} besonders macht, ist die strategische Verbindung von "
+            "digitaler Wertschöpfung und Marktexpansion — eine Dynamik, die ich "
+            "aus 12+ Jahren internationaler Marketing- und Geschäftsführung in "
+            "DACH und APAC kenne. Ich bin überzeugt, dass meine Erfahrung in der "
+            "Skalierung von Marken und der Operationalisierung digitaler Strategien "
+            f"einen konkreten Beitrag zu {company}s Wachstumskurs leisten kann."
         )
         close = (
-            "Ich freue mich auf ein persönliches Gespräch, um zu erörtern, wie "
-            "mein Profil Ihre Vertriebs- und Digitalstrategie bei "
-            f"{company} in den kommenden Quartalen konkret stärken kann. "
-            "Bitte zögern Sie nicht, mich jederzeit zu kontaktieren."
+            "Ich freue mich auf ein persönliches Gespräch, um zu erörtern, wie ich "
+            f"{company}s digitale Strategie in den kommenden Quartalen konkret "
+            "stärken kann. Bitte zögern Sie nicht, mich jederzeit zu kontaktieren."
         )
         recipient_block = (
             f"{company}<br>"
             "— Personalabteilung —<br>"
-            "Bochum, Deutschland"
+            f"{location}"
         )
+
     else:
         date_str = _today_en()
         subject = f"Application for {role}"
         salutation = f"Dear {recipient_name},"
         opening = (
-            f"I am writing to express my strong interest in the {role} position at "
-            f"{company}. As founder and CEO of a digital agency with 12+ years "
-            "of experience in B2B sales, pricing strategy, and market positioning — "
-            "including six years in Shanghai serving DACH and APAC clients — I bring "
-            "exactly the cross-cultural e-commerce expertise you are seeking."
+            f"I am writing to express my strong interest in the {role} position "
+            f"at {company}. As Founder & CEO of a digital agency with 12+ years of "
+            "international marketing and operational leadership — including 6 years "
+            "in Shanghai bridging DACH and APAC markets — I bring precisely the "
+            "blend of strategic thinking and hands-on execution you are looking for."
         )
         me_paragraph = (
-            "My background blends strategic marketing with hands-on technical "
-            "execution. As founder of Bold and Digital LLC (since 2020), I serve 20+ "
-            "international clients — including LiteSpeed Technologies and QUIC.cloud — "
-            "applying 4Ps/4S frameworks and pricing-strategy refits that deliver "
-            "20-30% margin improvements. In parallel, I run HostSalt (since 2021), "
-            "a managed-hosting platform hosting 500+ sites with 99.9% uptime and a "
-            "median LCP improvement of 35-50% per optimized site."
+            "My professional background combines strategic marketing with hands-on "
+            "technical execution. As Founder of Bold and Digital LLC (since 2020) "
+            "I serve 20+ international clients — including LiteSpeed Technologies "
+            "and QUIC.cloud — applying 4Ps/4S frameworks and pricing-strategy refits "
+            "that deliver 20-30% margin improvements. In parallel, I run HostSalt "
+            "(since 2021), a managed-hosting platform hosting 500+ sites with 99.9% "
+            "uptime and a median LCP improvement of 35-50% per optimized site."
         )
-        why_you_paragraph = (
-            f"What sets {company} apart is its unique blend of industrial tradition "
-            "and digital growth — a dynamic I know well from my time at Axus "
-            "Stationery (supplier to Faber-Castell, Maped, BIC) and Neobear "
-            "(Qualcomm/ZTE-backed AR-toys). In both roles I orchestrated OEM-to-ODM "
-            "transitions, scaled 50+ Amazon listings, and achieved ROAS of 4-6x. "
-            "That experience at the intersection of trade and digital value "
-            "creation aligns precisely with your focus on B2B e-commerce."
+        why_you_paragraph = why_you_para or (
+            f"What sets {company} apart is its strategic blend of digital value "
+            "creation and market expansion — a dynamic I know well from 12+ years "
+            "of international marketing and operational leadership across DACH and "
+            "APAC. I am confident my experience scaling brands and operationalizing "
+            f"digital strategies can contribute concretely to {company}'s growth trajectory."
         )
         close = (
             "I look forward to a personal conversation about how my profile can "
-            f"concretely strengthen {company}'s sales and digital strategy in the "
-            "coming quarters. Please do not hesitate to reach out at any time."
+            f"concretely strengthen {company}'s digital strategy in the coming "
+            "quarters. Please do not hesitate to reach out at any time."
         )
         recipient_block = (
             f"{company}<br>"
             "— Hiring Team —<br>"
-            "Bochum, Germany"
+            f"{location}"
         )
 
     return {
@@ -273,7 +297,7 @@ def html_to_pdf(html: str, output_path: Path) -> None:
     import re
     import base64
     import tempfile
-    from patchright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright
 
     def _inline(match):
         prefix, src, suffix = match.group(1), match.group(2), match.group(3)
@@ -294,7 +318,11 @@ def html_to_pdf(html: str, output_path: Path) -> None:
         tmp = f.name
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True, args=["--no-sandbox"])
+            browser = pw.chromium.launch(
+                headless=True, 
+                args=["--no-sandbox"],
+                executable_path="/Users/lars/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+            )
             page = browser.new_page()
             page.goto(f"file://{tmp}", wait_until="networkidle")
             page.pdf(path=str(output_path), format="A4", print_background=True)

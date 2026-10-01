@@ -80,10 +80,44 @@ def build_cv_context(job: dict, profile: dict) -> dict:
 
     skills_li = "".join(f"<li>{s}</li>" for s in skills)
     langs_li = "".join(
-        f"<li>{l.get('lang_en', l.get('lang_de', ''))} — {l.get('level', '')}</li>"
+        f"<li>{l.get(f'lang_{lang}', l.get('lang_en', l.get('lang_de', '')))} — {l.get('level', '')}</li>"
         for l in languages
     )
     certs_li = "".join(f"<li>{c}</li>" for c in certs)
+
+    # Volunteer section (4 entries from CV data)
+    volunteer = cv_data.get("volunteer", [])
+    volunteer_blocks = "".join(
+        f"""
+<article class="exp-block">
+  <div class="exp-header">
+    <h3>{v.get(f'org_{lang}', v.get('org_en', v.get('org_de', '')))}</h3>
+    <span class="meta">{v.get('period', '')}</span>
+  </div>
+  <div class="exp-role">{v.get(f'role_{lang}', v.get('role_en', ''))}</div>
+  <ul>{''.join(f'<li>{b}</li>' for b in v.get(f'bullets_{lang}', v.get('bullets_en', [])))}</ul>
+</article>"""
+        for v in volunteer
+    )
+
+    # Hobbies (simple list)
+    hobbies = cv_data.get("hobbies", [])
+    hobbies_li = "".join(f"<li>{h}</li>" for h in hobbies)
+
+    label_volunteer = "Ehrenamt" if lang == "de" else "Volunteer"
+    label_hobbies = "Interessen" if lang == "de" else "Interests"
+
+    volunteer_section = f"""
+    <section aria-labelledby="vol-h">
+      <h2 id="vol-h">{label_volunteer}</h2>
+      {volunteer_blocks}
+    </section>""" if volunteer_blocks else ""
+
+    hobbies_section = f"""
+    <section aria-labelledby="hob-h">
+      <h2 id="hob-h">{label_hobbies}</h2>
+      <ul class="grid">{hobbies_li}</ul>
+    </section>""" if hobbies_li else ""
 
     photo_url = personal.get("photo_path", "") or "config/photo.jpg"
 
@@ -117,6 +151,12 @@ def build_cv_context(job: dict, profile: dict) -> dict:
         "certifications_li": certs_li,
         "languages_heading": label_lang,
         "languages_li": langs_li,
+        "volunteer_heading": label_volunteer,
+        "volunteer_blocks": volunteer_blocks,
+        "volunteer_section": volunteer_section,
+        "hobbies_heading": label_hobbies,
+        "hobbies_li": hobbies_li,
+        "hobbies_section": hobbies_section,
         # Structured data tokens (modern v1 only)
         "keywords_csv": ", ".join(skills[:8]),
         "languages_jsonld": json.dumps([

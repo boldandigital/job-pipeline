@@ -221,6 +221,7 @@
   "languages": [
     {"lang_en": "German", "lang_de": "Deutsch", "level": "C2 — Full Proficiency"},
     {"lang_en": "English", "lang_de": "Englisch", "level": "C2 — Full Proficiency"},
+    {"lang_en": "Mandarin Chinese", "lang_de": "Mandarin (Chinesisch)", "level": "Conversational — 6 years in Shanghai (not formally certified)"},
     {"lang_en": "Portuguese", "lang_de": "Portugiesisch", "level": "A1 — Beginner"},
     {"lang_en": "Dutch", "lang_de": "Niederländisch", "level": "A1 — Beginner"}
   ],
