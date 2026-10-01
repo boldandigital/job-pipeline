@@ -228,6 +228,68 @@
     "Google Analytics Certification",
     "AI-Powered Shopping Ads Certification (Google)"
   ],
+  "volunteer": [
+    {
+      "period": "2013-08 → 2016-08",
+      "org_en": "Shanghai Photography Meetup Group",
+      "org_de": "Shanghai Fotografie Meetup-Gruppe",
+      "role_en": "Founder & Organizer",
+      "role_de": "Gründer & Organisator",
+      "bullets_en": [
+        "Founded and led a 200+ member photography community in Shanghai, organizing monthly photo walks, workshops, and peer critiques.",
+        "Curated and organized 3 public photography exhibitions at university venues, attracting 500+ attendees and local press coverage."
+      ],
+      "bullets_de": [
+        "Gründung und Leitung einer 200+ Mitglieder starken Fotografie-Community in Shanghai mit monatlichen Photo-Walks, Workshops und Peer-Reviews.",
+        "Kuration und Organisation von 3 öffentlichen Fotoausstellungen an Universitätsstandorten mit 500+ Besuchern und lokaler Presse."
+      ]
+    },
+    {
+      "period": "2014-01 → 2016-08",
+      "org_en": "\"Books in Shanghai\" Book Club",
+      "org_de": "\"Books in Shanghai\" Buchclub",
+      "role_en": "Co-Founder & Moderator",
+      "role_de": "Mitgründer & Moderator",
+      "bullets_en": [
+        "Co-founded and moderated a 50+ member English-language book club in Shanghai, facilitating monthly discussions on literature, business, and creativity.",
+        "Partnered with local bookstores and cultural venues for author talks and reading events."
+      ],
+      "bullets_de": [
+        "Mitgründer und Moderator eines 50+ Mitglieder starken englischsprachigen Buchclubs in Shanghai mit monatlichen Diskussionen zu Literatur, Business und Kreativität.",
+        "Partnerschaften mit lokalen Buchhandlungen und Kulturstätten für Autorenlesungen und Events."
+      ]
+    },
+    {
+      "period": "2021-01 → present",
+      "org_en": "LiteSpeed Slack Community & Reddit r/LiteSpeed",
+      "org_de": "LiteSpeed Slack Community & Reddit r/LiteSpeed",
+      "role_en": "Volunteer Technical Advisor",
+      "role_de": "Freiwilliger Technischer Berater",
+      "bullets_en": [
+        "Provide daily pro-bono technical support for 500+ community members on LiteSpeed Web Server, OpenLiteSpeed, and QUIC.cloud configuration.",
+        "Authored 200+ troubleshooting guides and best-practice posts adopted as unofficial community documentation."
+      ],
+      "bullets_de": [
+        "Tägliche pro-bono technischer Support für 500+ Community-Mitglieder zu LiteSpeed Web Server, OpenLiteSpeed und QUIC.cloud Konfiguration.",
+        "Verfasser von 200+ Troubleshooting-Guides und Best-Practice-Beiträgen, die als inoffizielle Community-Dokumentation dienen."
+      ]
+    },
+    {
+      "period": "2011-01 → 2013-01",
+      "org_en": "Universität Passau — Photo Exhibitions (Volunteer)",
+      "org_de": "Universität Passau — Fotoausstellungen (Ehrenamtlich)",
+      "role_en": "Volunteer Exhibition Organizer",
+      "role_de": "Ehrenamtlicher Ausstellungsorganisator",
+      "bullets_en": [
+        "Organized 4 student photography exhibitions at university venues, handling curation, logistics, printing, and vernissage events for 300+ total attendees.",
+        "Mentored 15+ junior students in curation, printing workflow, and exhibition design."
+      ],
+      "bullets_de": [
+        "Organisation von 4 studentischen Fotoausstellungen an Universitätsstandorten — Kuratierung, Logistik, Druck und Vernissage für 300+ Gesamtbesucher.",
+        "Mentoring von 15+ Junior-Studierenden in Kuratierung, Druck-Workflow und Ausstellungsdesign."
+      ]
+    }
+  ],
   "education": [
     {
       "degree_en": "Bachelor of Arts (B.A.) — Cultural Business / European Studies (Kulturwirtschaft / Europastudien)",
