@@ -33,6 +33,12 @@
 # ║    account as gpl-love (~/.hermes/credentials/google-service-account  ║
 # ║    .json). Idempotent — re-running overwrites the day's tab.        ║
 # ║                                                                      ║
+# ║  Lifecycle sync (MAIL-2):                                            ║
+# ║    `--sync-lifecycle [tab]` pushes DB lifecycle state (mail_*,      ║
+# ║    interview_at, outcome, salary_range, cv_version) into the Sheet's ║
+# ║    M→S columns. Pairs with `--sheet` — the daily batch creates the  ║
+# ║    tab with A:L data, `--sync-lifecycle` patches the MAIL-2 columns.║
+# ║                                                                      ║
 # ║  Usage:                                                              ║
 # ║    bash scripts/lars-daily-run.sh                       # daily run  ║
 # ║    bash scripts/lars-daily-run.sh --dry-run             # no Discord║
@@ -42,6 +48,9 @@
 # ║    bash scripts/lars-daily-run.sh --sync-from-sheet     # sync yest.║
 # ║    bash scripts/lars-daily-run.sh --sync-from-sheet 2026-09-26       ║
 # ║                                              # sync a specific tab  ║
+# ║    bash scripts/lars-daily-run.sh --sheet --sync-lifecycle           ║
+# ║                                              # write + patch in one ║
+# ║    bash scripts/lars-daily-run.sh --sync-lifecycle       # patch    ║
 # ║    bash scripts/lars-daily-run.sh --apply              # generate   ║
 # ║                                              # apply-zip for appr. ║
 # ╚═══════════════════════════════════════════════════════════════════════╝
@@ -56,11 +65,14 @@ fail()  { log "[FAIL] $*" >&3; log "[FAIL] $*"; exit 1; }
 # ───────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+VENV_PY="$PROJECT_DIR/.venv/bin/python"
+PYTHON_BIN="${PYTHON_BIN:-$(command -v "$VENV_PY" 2>/dev/null || which python3)}"
 cd "$PROJECT_DIR"
 
 DRY_RUN=0
 TEST_PING=0
 SYNC_FROM_SHEET_TAB=""
+SYNC_LIFECYCLE_TAB=""   # MAIL-2: tab to push DB lifecycle state into M:S
 APPLY_MODE=0
 SCRAPE_SOURCES="stepstone,xing,arbeitsagentur"   # ADOPT-13 default — LinkedIn needs JobSpy
 SKIP_SCRAPE=0
@@ -76,6 +88,16 @@ while [[ $# -gt 0 ]]; do
         SYNC_FROM_SHEET_TAB="$2"; shift
       else
         SYNC_FROM_SHEET_TAB="__YESTERDAY__"
+      fi
+      ;;
+    --sync-lifecycle)
+      # MAIL-2: optional tab name; if absent we default to today (the tab
+      # that --sheet just wrote). The flag is a no-op when the DB has no
+      # jobs with lifecycle state — sync_lifecycle logs and exits 0.
+      if [[ "${2:-}" && "${2:-}" != --* ]]; then
+        SYNC_LIFECYCLE_TAB="$2"; shift
+      else
+        SYNC_LIFECYCLE_TAB="__TODAY__"
       fi
       ;;
     --apply)          APPLY_MODE=1 ;;
@@ -101,6 +123,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --sheet                                 After the batch step, write today's jobs to"
       echo "                                          today's YYYY-MM-DD tab. Needs GOOGLE_SPREADSHEET_ID"
       echo "                                          + GOOGLE_APPLICATION_CREDENTIALS in .env."
+      echo "  --sync-lifecycle [tab]                  After --sheet, push DB lifecycle state (MAIL-2"
+      echo "                                          columns M:S) into the tab. Defaults to today's tab."
       exit 0
       ;;
     *)                REST_ARGS+=("$1") ;;
@@ -179,12 +203,12 @@ elif [[ -n "${DISCORD_WEBHOOK_URL:-}" ]]; then
   DISCORD_MODE="webhook"
 fi
 
-if [[ "$TEST_PING" -eq 0 && -z "$DISCORD_MODE" && "$SYNC_FROM_SHEET_TAB" == "" && "$APPLY_MODE" -eq 0 ]]; then
+if [[ "$TEST_PING" -eq 0 && -z "$DISCORD_MODE" && "$SYNC_FROM_SHEET_TAB" == "" && "$APPLY_MODE" -eq 0 && -z "$SYNC_LIFECYCLE_TAB" ]]; then
   echo "[FATAL] No Discord delivery configured. Need one of:" >&2
   echo "  • DISCORD_BOT_TOKEN + DISCORD_CHANNEL_ID (recommended — same Hermes bot)" >&2
   echo "  • DISCORD_WEBHOOK_URL (legacy webhook — see ADOPT-7 commit)" >&2
   echo "  See .env.example and docs/SECRETS.md." >&2
-  echo "  (Note: --sync-from-sheet and --apply don't need Discord — pass that flag if it's missing.)" >&2
+  echo "  (Note: --sync-from-sheet, --sync-lifecycle, and --apply don't need Discord — pass that flag if it's missing.)" >&2
   exit 4
 fi
 
@@ -198,7 +222,7 @@ mkdir -p "$PROJECT_DIR/logs"
 # the case where setup.sh wasn't run.
 # ───────────────────────────────────────────────────────────────────────
 log_needs_init() {
-  /usr/bin/env python3 - "$DB_PATH" <<'PY' 2>/dev/null
+  "$PYTHON_BIN" - "$DB_PATH" <<'PY' 2>/dev/null
 import sqlite3, sys
 db = sys.argv[1]
 try:
@@ -216,7 +240,7 @@ fi
 
 if ! log_needs_init; then
   log "Jobs table missing — running init_db($DB_PATH)"
-  /usr/bin/env python3 - "$DB_PATH" <<PY
+  "$PYTHON_BIN" - "$DB_PATH" <<PY
 import sys
 sys.path.insert(0, "$PROJECT_DIR")
 from src.db import init_db
@@ -257,7 +281,7 @@ exec 3>>"$ERROR_LOG"
 log "──────────────────────────────────────────────────────────────"
 log "Lars daily pipeline START  (PID $$)"
 log "Project: $PROJECT_DIR"
-log "Python:  $(which python3) ($(python3 --version 2>&1))"
+log "Python:  $PYTHON_BIN ($($PYTHON_BIN --version 2>&1))"
 log "Discord: mode=$DISCORD_MODE  channel=${DISCORD_CHANNEL_ID:-${DISCORD_WEBHOOK_URL:0:40}…}"
 
 # Cold-start jitter — avoid stampede at exactly 09:00:00
@@ -279,7 +303,7 @@ discord_send() {
   DISCORD_CHANNEL_ID="${DISCORD_CHANNEL_ID:-}" \
   DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-}" \
   DISCORD_USERNAME="${DISCORD_USERNAME:-}" \
-  /usr/bin/env python3 - "$attachment" <<PY || return $?
+  "$PYTHON_BIN" - "$attachment" <<PY || return $?
 import os, json, sys, urllib.request, urllib.error
 
 msg        = """$msg"""
@@ -371,7 +395,7 @@ if [[ -n "$SYNC_FROM_SHEET_TAB" ]]; then
 
   # Pre-flight: ensure the schema has the ADOPT-11 columns. Migration is
   # idempotent — a no-op when the columns already exist.
-  /usr/bin/env python3 - "$DB_PATH" <<PY 2>&1 || log "(schema migration skipped)"
+  "$PYTHON_BIN" - "$DB_PATH" <<PY 2>&1 || log "(schema migration skipped)"
 import sys
 sys.path.insert(0, "$PROJECT_DIR")
 from scripts.migrate_schema_add_approval_columns import migrate
@@ -379,7 +403,7 @@ migrate(sys.argv[1])
 PY
 
   set +e
-  /usr/bin/env python3 -m src.sheet.sync_approvals \
+  $PYTHON_BIN -m src.sheet.sync_approvals \
     --sheet-id "$GOOGLE_SPREADSHEET_ID" \
     --db "$DB_PATH" \
     "$SYNC_FROM_SHEET_TAB"
@@ -390,6 +414,52 @@ PY
     log "[WARN] sync_from_sheet exited $sync_rc — see $ERROR_LOG for details"
   fi
   log "sync-from-sheet DONE"
+  exit 0
+fi
+
+# ───────────────────────────────────────────────────────────────────────
+# MAIL-2: --sync-lifecycle — push DB lifecycle state into Sheet M:S
+# columns. Standalone (no Discord required) so it can run on cron or
+# on demand. Idempotent — re-running with unchanged DB state is a no-op.
+# ───────────────────────────────────────────────────────────────────────
+if [[ -n "$SYNC_LIFECYCLE_TAB" ]]; then
+  if [[ "$SYNC_LIFECYCLE_TAB" == "__TODAY__" ]]; then
+    SYNC_LIFECYCLE_TAB="$(date -u +%Y-%m-%d)"
+  fi
+  log "MAIL-2 sync-lifecycle: tab=$SYNC_LIFECYCLE_TAB  db=$DB_PATH"
+
+  if [[ -z "${GOOGLE_SPREADSHEET_ID:-}" ]]; then
+    log "[WARN] GOOGLE_SPREADSHEET_ID not set in .env — sync-lifecycle cannot reach the Sheet."
+    log "[WARN] Set it in /Users/lars/Documents/Projects/job-pipeline/.env then retry."
+    log "[WARN] (See .env.example for the key name.)"
+    exit 0
+  fi
+
+  # Schema pre-flight: ensure MAIL-2 columns + outcome backfill. Idempotent.
+  "$PYTHON_BIN" - "$DB_PATH" <<PY 2>&1 || log "(lifecycle migration skipped)"
+import sys
+sys.path.insert(0, "$PROJECT_DIR")
+try:
+    from scripts.migrate_schema_add_lifecycle import run as _ml
+    _ml(sys.argv[1])
+except Exception as e:
+    print(f"lifecycle migration skipped: {e}")
+PY
+
+  set +e
+  $PYTHON_BIN -m src.sheet.google_writer \
+    --sheet-id "$GOOGLE_SPREADSHEET_ID" \
+    --tab   "$SYNC_LIFECYCLE_TAB" \
+    --sync-lifecycle \
+    --db    "$DB_PATH" 2>&1
+  sync_lc_rc=$?
+  set -e
+
+  if [[ $sync_lc_rc -ne 0 ]]; then
+    log "[WARN] sync_lifecycle exited $sync_lc_rc — see $ERROR_LOG for details"
+  else
+    log "MAIL-2 sync-lifecycle DONE"
+  fi
   exit 0
 fi
 
@@ -425,12 +495,12 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   log "Dry-run: scoring + selection + career discovery"
   # SCORING_CONFIG exported above — picked up by score_jobs via --config arg.
   /usr/bin/env SCORING_CONFIG="$SCORING_CONFIG" \
-    python3 -m src.scoring.score_jobs --db "$DB_PATH" --config "$SCORING_CONFIG" 2>&1 || true
+    $PYTHON_BIN -m src.scoring.score_jobs --db "$DB_PATH" --config "$SCORING_CONFIG" 2>&1 || true
   # ADOPT-14: batch_pipeline --dry-run now also runs career discovery and logs
   # "Career URLs discovered: N (L1=X L2=Y L3=Z)" — see src/pipeline/batch_pipeline.py.
-  /usr/bin/env python3 -m src.pipeline.batch_pipeline --db "$DB_PATH" --limit 20 --dry-run
-  CAREER_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE career_url IS NOT NULL AND career_url!=\"\"').fetchone()[0])")"
-  ATS_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE ats_type IS NOT NULL AND ats_type!=\"\"').fetchone()[0])")"
+  $PYTHON_BIN -m src.pipeline.batch_pipeline --db "$DB_PATH" --limit 20 --dry-run
+  CAREER_COUNT="$($PYTHON_BIN -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE career_url IS NOT NULL AND career_url!=\"\"').fetchone()[0])")"
+  ATS_COUNT="$($PYTHON_BIN -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE ats_type IS NOT NULL AND ats_type!=\"\"').fetchone()[0])")"
   log "Dry-run summary: $CAREER_COUNT jobs have career_url, $ATS_COUNT have ATS detected"
   exit 0
 fi
@@ -454,7 +524,7 @@ run_scrapers() {
       stepstone)
         log "  scraping stepstone…"
         set +e
-        /usr/bin/env python3 -m src.scrapers.stepstone_scraper \
+        $PYTHON_BIN -m src.scrapers.stepstone_scraper \
           --queries "Founder" "CTO" "Head of Digital" "Geschäftsführer" \
           --location "Deutschland" --max-pages 3 --db "$DB_PATH" 2>&1 \
           || log "  stepstone failed (non-fatal)"
@@ -463,7 +533,7 @@ run_scrapers() {
       xing)
         log "  scraping xing…"
         set +e
-        /usr/bin/env python3 -m src.scrapers.xing_scraper \
+        $PYTHON_BIN -m src.scrapers.xing_scraper \
           --queries "founder digital" "cto startup" "head of digital" \
                     "managing director agency" "geschäftsführer digital" \
           --location "Deutschland" --max-pages 3 --limit 25 --db "$DB_PATH" 2>&1 \
@@ -473,7 +543,7 @@ run_scrapers() {
       arbeitsagentur)
         log "  scraping arbeitsagentur…"
         set +e
-        /usr/bin/env python3 -m src.scrapers.arbeitsagentur_scraper \
+        $PYTHON_BIN -m src.scrapers.arbeitsagentur_scraper \
           --queries "Founder" "CTO" "Head of Digital" "Geschäftsführer" \
           --limit 25 --db "$DB_PATH" 2>&1 \
           || log "  arbeitsagentur failed (non-fatal)"
@@ -497,11 +567,11 @@ run_scrapers
 log "Step 2/4: keyword scoring"
 # SCORING_CONFIG exported above — passed both via env and CLI for belt+suspenders.
 /usr/bin/env SCORING_CONFIG="$SCORING_CONFIG" \
-  python3 -m src.scoring.score_jobs --db "$DB_PATH" --config "$SCORING_CONFIG" 2>&1 || fail "scoring crashed"
+  $PYTHON_BIN -m src.scoring.score_jobs --db "$DB_PATH" --config "$SCORING_CONFIG" 2>&1 || fail "scoring crashed"
 
 log "Step 3/4: batch pipeline (top 50 → CV + CL → ZIP)"
 set +e
-/usr/bin/env python3 -m src.pipeline.batch_pipeline \
+$PYTHON_BIN -m src.pipeline.batch_pipeline \
   --db "$DB_PATH" \
   --limit 50 \
   --min-score 20 2>&1
@@ -529,7 +599,7 @@ if [[ "$SHEET_MODE" -eq 1 ]]; then
 
     # Schema pre-flight: ADOPT-11 added columns used here. ADOPT-10 is fine
     # without them, but the SELECT below reads rejection_reason if present.
-    /usr/bin/env python3 - "$DB_PATH" <<PY 2>&1 || log "(schema migration skipped)"
+    "$PYTHON_BIN" - "$DB_PATH" <<PY 2>&1 || log "(schema migration skipped)"
 import sys
 sys.path.insert(0, "$PROJECT_DIR")
 try:
@@ -540,7 +610,7 @@ except Exception as e:
 PY
 
     set +e
-    /usr/bin/env python3 -m src.sheet.google_writer \
+    $PYTHON_BIN -m src.sheet.google_writer \
       --sheet-id "$GOOGLE_SPREADSHEET_ID" \
       --db "$DB_PATH" \
       --tab "$TODAY_TAB" \
@@ -553,17 +623,20 @@ PY
       log "[WARN] sheet write exited $sheet_rc — see $ERROR_LOG for details"
     else
       log "ADOPT-10 sheet write OK ($TODAY_TAB)"
+      # MAIL-2: --sync-lifecycle was passed alongside --sheet — the
+      # google_writer CLI handles the chain (sync after write). Nothing
+      # more to do here; see google_writer main() :: --sync-lifecycle.
     fi
   fi
 fi
 
 log "Step 4/4: send friendly summary even if batch was empty"
-TOP_TIER_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute(\"SELECT COUNT(*) FROM jobs WHERE score>=150\").fetchone()[0])")"
-STANDARD_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute(\"SELECT COUNT(*) FROM jobs WHERE score>=80 AND score<150\").fetchone()[0])")"
-TOTAL_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs').fetchone()[0])")"
+TOP_TIER_COUNT="$($PYTHON_BIN -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute(\"SELECT COUNT(*) FROM jobs WHERE score>=150\").fetchone()[0])")"
+STANDARD_COUNT="$($PYTHON_BIN -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute(\"SELECT COUNT(*) FROM jobs WHERE score>=80 AND score<150\").fetchone()[0])")"
+TOTAL_COUNT="$($PYTHON_BIN -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs').fetchone()[0])")"
 # ADOPT-14: surface career discovery stats in the Discord summary.
-CAREER_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE career_url IS NOT NULL AND career_url!=\"\"').fetchone()[0])")"
-ATS_COUNT="$(/usr/bin/env python3 -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE ats_type IS NOT NULL AND ats_type!=\"\"').fetchone()[0])")"
+CAREER_COUNT="$($PYTHON_BIN -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE career_url IS NOT NULL AND career_url!=\"\"').fetchone()[0])")"
+ATS_COUNT="$($PYTHON_BIN -c "import sqlite3; print(sqlite3.connect('$DB_PATH').execute('SELECT COUNT(*) FROM jobs WHERE ats_type IS NOT NULL AND ats_type!=\"\"').fetchone()[0])")"
 
 SUMMARY="⚓ Daily batch done at $(date '+%H:%M %Z').
 Jobs in DB: ${TOTAL_COUNT}
