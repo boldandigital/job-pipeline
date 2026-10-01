@@ -564,6 +564,15 @@ run_scrapers() {
 log "Step 1/4: scrape (sources=$SCRAPE_SOURCES)"
 run_scrapers
 
+# ADOPT-13 extension — XING scraper saves title+url but no description.
+# Without descriptions, scoring can only match against title text and most
+# rates come out as 0. Fetching descriptions before scoring makes scores
+# meaningful.
+if [[ "$SKIP_SCRAPE" -eq 0 ]] && [[ "$DRY_RUN" -eq 1 || "$DRY_RUN" -eq 0 ]]; then
+  log "Step 1.5: fetch descriptions (XING jobs without text)"
+  $PYTHON_BIN scripts/fetch_descriptions.py --limit 25 || log "(description fetch skipped or failed)"
+fi
+
 log "Step 2/4: keyword scoring"
 # SCORING_CONFIG exported above — passed both via env and CLI for belt+suspenders.
 /usr/bin/env SCORING_CONFIG="$SCORING_CONFIG" \
