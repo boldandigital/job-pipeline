@@ -10,8 +10,8 @@
     "websites": ["https://boldandigital.com", "https://hostsalt.com"],
     "photo_path": "/Users/lars/Documents/Projects/job-pipeline/config/photo.jpg"
   },
-  "summary_en": "Founder and CEO of Bold and Digital LLC since 2020, leading a digital agency that helps international clients — including LiteSpeed Technologies and QUIC.cloud — sharpen their digital presence through tailored web development, branding, market positioning, pricing strategy, and cloud solutions. 12+ years building and scaling businesses in Europe and Asia, combining strategic marketing with hands-on technical execution. As founder of HostSalt since 2021, I also design and operate fully managed hosting infrastructure for agencies, e-commerce businesses, and developers. Previously led international marketing teams in Shanghai (China) for Strichpunkt Design, Axus Stationery (one of the world's largest pencil producers, supplying Faber-Castell/Maped/BIC) and Neobear (Qualcomm/ZTE-backed AR-for-kids). Languages: German C2 and English C2; conversational Portuguese and Dutch. Track record of turning complex digital challenges into measurable growth across 4 continents and 12+ international markets.",
-  "summary_de": "Gründer und CEO der Bold and Digital LLC seit 2020. Ich leite eine Digitalagentur, die internationale Kunden — darunter LiteSpeed Technologies und QUIC.cloud — bei Webentwicklung, Branding, Marktpositionierung, Preisstrategie und Cloud-Lösungen unterstützt. 12+ Jahre Erfahrung im Aufbau und der Skalierung von Unternehmen in Europa und Asien, mit einer Kombination aus strategislem Marketing und hands-on technischer Umsetzung. Als Gründer von HostSalt seit 2021 konzipiere und betreibe ich zusätzlich vollständig verwaltete Hosting-Infrastruktur für Agenturen, E-Commerce-Unternehmen und Entwickler. Zuvor leitete ich internationale Marketingteams in Shanghai (China) für Strichpunkt Design, Axus Stationery (einer der weltweit größten Bleistiftproduzenten, Lieferant von Faber-Castell/Maped/BIC) und Neobear (Qualcomm/ZTE-gefördertes AR-Spielzeug). Sprachen: Deutsch C2, Englisch C2, Portugiesisch und Niederländisch auf Anfängerniveau. Mit nachweistlicher Erfolgsbilanz bei der Übersetzung komplexer digitaler Herausforderungen in messbares Wachstum über 4 Kontinente und 12+ internationale Märkte.",
+  "summary_en": "Founder and CEO of Bold and Digital LLC since 2020, leading a digital agency that helps international clients — including LiteSpeed Technologies and QUIC.cloud — sharpen their digital presence through tailored web development, branding, market positioning, pricing strategy, and cloud solutions. 12+ years building and scaling businesses in Europe and Asia, combining strategic marketing with hands-on technical execution. As founder of HostSalt since 2021, I also design and operate fully managed hosting infrastructure for agencies, e-commerce businesses, and developers. Previously led international marketing teams in Shanghai (China) for Strichpunkt Design, Axus Stationery (one of the world's largest pencil producers, supplying Faber-Castell/Maped/BIC) and Neobear (Qualcomm/ZTE-backed AR-for-kids). Languages: German C2 and English C2; conversational Portuguese and Dutch. Track record of turning complex digital challenges into measurable growth across 3 continents (Europe, Asia, North America) and 12+ international markets.",
+  "summary_de": "Gründer und CEO der Bold and Digital LLC seit 2020. Ich leite eine Digitalagentur, die internationale Kunden — darunter LiteSpeed Technologies und QUIC.cloud — bei Webentwicklung, Branding, Marktpositionierung, Preisstrategie und Cloud-Lösungen unterstützt. 12+ Jahre Erfahrung im Aufbau und der Skalierung von Unternehmen in Europa und Asien, mit einer Kombination aus strategischem Marketing und hands-on technischer Umsetzung. Als Gründer von HostSalt seit 2021 konzipiere und betreibe ich zusätzlich vollständig verwaltete Hosting-Infrastruktur für Agenturen, E-Commerce-Unternehmen und Entwickler. Zuvor leitete ich internationale Marketingteams in Shanghai (China) für Strichpunkt Design, Axus Stationery (einer der weltweit größten Bleistiftproduzenten, Lieferant von Faber-Castell/Maped/BIC) und Neobear (Qualcomm/ZTE-gefördertes AR-Spielzeug). Sprachen: Deutsch C2, Englisch C2, Portugiesisch und Niederländisch auf Anfängerniveau. Mit nachweislicher Erfolgsbilanz bei der Übersetzung komplexer digitaler Herausforderungen in messbares Wachstum über 3 Kontinente (Europa, Asien, Nordamerika) und 12+ internationale Märkte.",
   "experience": [
     {
       "period": "2019-10 → 2020-06",
@@ -178,7 +178,7 @@
         "Cloud Architecture & DevOps (AWS, Azure, Docker, Git, CI/CD, Linux)",
         "AI Workflow Engineering (LLM agents, MCP, prompt design, RAG pipelines, autonomous task orchestration)",
         "Branding, Identity & Market Positioning (Pitch decks, NPS-driven frameworks)",
-        "International Business Development (DACH + Benelux + APAC; 4 continents, 12+ markets)",
+        "International Business Development (DACH + Benelux + APAC; 3 continents, 12+ markets)",
         "Salesforce.com Implementation & CRM Strategy (multi-segment big-data analysis)",
         "Pricing Strategy (4Ps / 4S Framework, OEM-to-ODM transitions, 12 markets)",
         "B2B Sales Funnels, Conversion-Optimierung & KPI-Steuerung (ROAS 3-6x)",
@@ -195,7 +195,7 @@
         "Cloud-Architektur & DevOps (AWS, Azure, Docker, Git, CI/CD, Linux)",
         "AI-Workflow-Engineering (LLM-Agenten, MCP, Prompt-Design, RAG-Pipelines, autonome Aufgabenorchestrierung)",
         "Branding, Identity & Marktpositionierung (Pitch-Decks, NPS-Frameworks)",
-        "Internationale Geschäftsentwicklung (DACH + Benelux + APAC; 4 Kontinente, 12+ Märkte)",
+        "Internationale Geschäftsentwicklung (DACH + Benelux + APAC; 3 Kontinente, 12+ Märkte)",
         "Salesforce.com-Implementierung & CRM-Strategie (Multi-Segment Big-Data)",
         "Preisstrategie (4Ps/4S-Framework, OEM-auf-ODM-Übergänge, 12 Märkte)",
         "B2B-Vertriebs-Trichter, Conversion-Optimierung & KPI-Steuerung (ROAS 3-6x)",
@@ -228,7 +228,7 @@
   ],
   "additional_info": {
     "years_experience": 12,
-    "continents_worked": 4,
+    "continents_worked": 3,
     "international_markets": 12,
     "native_languages": 1,
     "professional_languages": 4,
