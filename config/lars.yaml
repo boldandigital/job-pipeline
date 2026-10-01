@@ -29,17 +29,33 @@ search:
     - "linkedin"
 
   locations:
-    - "Remote, Europe"
-    - "Germany"
-    - "Berlin, Germany"           # primary preferred hub
+    # Belgium base
+    - "Brussels, Belgium"
+    - "Leuven, Belgium"           # Lars lives in Aarschot (near Leuven)
+    - "Aarschot, Belgium"
+    - "Antwerp, Belgium"
+    - "Ghent, Belgium"
+    # Luxembourg
+    - "Luxembourg City, Luxembourg"
+    - "Luxembourg"
+    # Rhein-Main area (Cologne, Düsseldorf, Frankfurt)
+    - "Cologne, Germany"
+    - "Köln, Germany"
+    - "Düsseldorf, Germany"
+    - "Frankfurt, Germany"
+    - "Frankfurt am Main, Germany"
+    - "Bonn, Germany"
+    - "Mainz, Germany"
+    - "Wiesbaden, Germany"
+    - "Rhein-Main, Germany"
+    # DACH broader for backup
+    - "Berlin, Germany"
     - "Munich, Germany"
     - "Hamburg, Germany"
     - "Vienna, Austria"
     - "Zurich, Switzerland"
-    - "Brussels, Belgium"
-    - "Amsterdam, Netherlands"
-    - "Leuven, Belgium"           # Lars lives in Aarschot (near Leuven)
-    - "Aarschot, Belgium"
+    # Remote EU
+    - "Remote, Europe"
 
   country_indeed: "Germany"
 
@@ -89,44 +105,44 @@ parallel:
 # via the XING branch of run_scrapers() (--source xing).
 # ============================================================
 xing_queries:
-  - "founder digital"                 # EN: founder/CTO/Co-Founder roles
-  - "cto startup"                     # EN: explicit CTO at early-stage
-  - "head of digital"                 # EN: senior leadership
-  - "managing director agency"        # EN: agency MD track
-  - "geschäftsführer digital"         # DE: MD (Geschäftsführer) for higher DACH recall
+  - "digital consultant"              # EN: IC + agency-side roles
+  - "digital beratung"                # DE: explicit "Digitalberatung" wording
+  - "digital strategist"              # EN: strategy + consulting
+  - "ecommerce manager"               # EN: matches PICARD test
+  - "e-commerce manager"              # DE-style variant
+  - "performance marketing"           # EN: marketing lane
+  - "marketing manager digital"       # EN/DE hybrid
+  - "digital contractor"              # EN: freelance / project
+  - "freelance digital"               # EN: 1099 / IC
+  - "co-founder digital"              # EN: equity track
+  - "co-founder ecommerce"               # MD (Geschäftsführer) for higher DACH recall
 
-xing_location: "Deutschland"          # XING's location filter. DACH-heavy by default.
+xing_location: "Rhein-Main"          # Cologne / Düsseldorf / Frankfurt region default
 queries:
 
   # ─────────────────────────────────────────────────────────
-  # PRIORITY 1 — Founder / CTO / Head-of-Digital leadership
+  # PRIORITY 1 — Digital Consultant / Digital Berater
   # ─────────────────────────────────────────────────────────
-  founder_cto:
-    - "Founder"
-    - "Co-Founder"
-    - "CTO"
-    - "Chief Technology Officer"
-    - "Chief Digital Officer"
-    - "Chief Executive Officer"
-    - "CEO"
-    - "Gründer"
-    - "Mitgründer"
-    - "Geschäftsführer"
-    - "Vorstand"
-    - "Head of Digital"
-    - "Head of Digital Transformation"
-    - "Head of Digital Strategy"
-    - "Head of Technology"
-    - "Head of Engineering"
-    - "Head of Product"
-    - "VP Engineering"
-    - "VP Digital"
-    - "VP Product"
-    - "Director Digital"
-    - "Director Technology"
-    - "Director Engineering"
-    - "Digital Lead"
-    - "Technical Co-Founder"
+  digital_consultant:
+    - "Digital Consultant"
+    - "Digital Berater"
+    - "Digital Beratung"
+    - "Digital Strategist"
+    - "Digital Strategy Consultant"
+    - "Senior Digital Consultant"
+    - "Digital Transformation Consultant"
+    - "E-Commerce Consultant"
+    - "E-Commerce Berater"
+    - "Performance Marketing Consultant"
+    - "Marketing Consultant"
+    - "Digital Marketing Consultant"
+    - "Growth Consultant"
+    - "Brand Consultant"
+    - "Brand Strategist"
+    - "Pricing Strategist"
+    - "Go-to-Market Consultant"
+    - "GTM Consultant"
+    - "Salesforce Consultant"
 
   # ─────────────────────────────────────────────────────────
   # PRIORITY 2 — Senior management track (wider net)
@@ -213,6 +229,9 @@ scoring:
     principal_role: 150
     lead_role: 140
     senior_role: 110
+    mid_role: 90                    # NEW: matches Ye's mid+senior+C-level scope
+    digital_consultant: 220         # NEW: highest weight — Ye's #1 lane 2026-09-30
+    contractor: 110                 # NEW: matches IC / freelance lanes
 
     # ── DOMAIN FIT (Lars's actual skill set) ───────────────
     # Boost categories that map directly to his CV
@@ -313,15 +332,30 @@ scoring:
       - "remote benelux"
 
     preferred_city:
+      # Belgium base
+      - "brussels"
+      - "leuven"
+      - "aarschot"
+      - "antwerp"
+      - "ghent"
+      # Rhein-Main (NEW: Cologne / Düsseldorf / Frankfurt area)
+      - "cologne"
+      - "köln"
+      - "düsseldorf"
+      - "duesseldorf"
+      - "frankfurt"
+      - "bonn"
+      - "mainz"
+      - "wiesbaden"
+      # Luxembourg
+      - "luxembourg"
+      # DACH broader
       - "berlin"
       - "munich"          # also matches münchen
       - "hamburg"
       - "vienna"          # also matches wien
       - "zurich"          # also matches zürich
-      - "brussels"
       - "amsterdam"
-      - "leuven"
-      - "aarschot"
 
     german_language:
       - "german required"
@@ -371,6 +405,45 @@ scoring:
 
     senior_role:
       - \bsenior\b
+
+    # Mid-level (NEW: included per Ye 2026-09-30)
+    mid_role:
+      - \bmid[- ]level\b
+      - \bmanager\b
+      - \bteamlead\b
+      - \bleiter\b
+      - \babteilungsleiter\b
+      - \bbereichsleiter\b
+
+    # Digital Consultant / Beratung (NEW: Ye's #1 lane 2026-09-30)
+    digital_consultant:
+      - "digital consultant"
+      - "digital berater"
+      - "digital beratung"
+      - "digital strategist"
+      - "digital strategy"
+      - "digital transformation"
+      - "e-commerce consultant"
+      - "ecommerce consultant"
+      - "performance marketing"
+      - "marketing consultant"
+      - "brand consultant"
+      - "brand strategy"
+      - "growth consultant"
+      - "gtm consultant"
+      - "go-to-market"
+      - "pricing strategist"
+      - "marketing manager"
+
+    # Contractor / freelance (NEW: Ye also wants IC lanes)
+    contractor:
+      - "contractor"
+      - "freelance"
+      - "freiberuflich"
+      - "freelancer"
+      - "interim"
+      - "project-based"
+      - "auftragnehmer"
 
     # DOMAIN FIT ───────────────────────────────────────────
     web_hosting:
