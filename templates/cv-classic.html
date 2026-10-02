@@ -56,6 +56,14 @@
     .skills { font-size: 10.5pt; }
     .skills li { margin-bottom: 1px; }
     .muted { color: #555; }
+    .photo-header {
+      float: right;
+      width: 84px;
+      height: 84px;
+      border-radius: 4px;
+      object-fit: cover;
+      margin: 0 0 8px 12px;
+    }
     @page { margin: 18mm; }
     @media print {
       body { margin: 0; padding: 0; max-width: 100%; }
@@ -66,6 +74,7 @@
 
 <!-- HEADER (in body, NOT in <header>) -->
 <h1>{{name}}</h1>
+<img class="photo-header" src="{{photo_url}}" alt="Professional headshot of {{name}}">
 <!-- Contact spans; empty {{phone}} is filtered by .contact span:empty { display: none } -->
 <div class="contact">
   <span>{{title}}</span>

@@ -99,12 +99,23 @@ def get_css():
     }
     .signature {
         margin-top: 25px;
+        page-break-after: avoid;
+        break-after: avoid;
+    }
+    /* Force everything to fit on one page if possible */
+    .header, .date, .recipient, .subject, .body, .signature {
+        page-break-inside: avoid;
     }
     """
 
 
-def build_html(company, role, recipient, body_paragraphs, language="en"):
-    """Build cover letter HTML."""
+def build_html(company, role, recipient, body_paragraphs, language="en", job_location=None):
+    """Build cover letter HTML.
+
+    job_location: if provided, used in the recipient address block
+                 (e.g., "Rostock, Germany" for Zasta Karriere).
+                 If None, falls back to candidate's own location.
+    """
     lang = language.lower()
     date_str = datetime.now().strftime("%d.%m.%Y") if lang == "de" else datetime.now().strftime("%B %d, %Y")
 
@@ -126,6 +137,12 @@ def build_html(company, role, recipient, body_paragraphs, language="en"):
 
     body_html = "\n".join(f"<p>{p.strip()}</p>" for p in body_paragraphs if p.strip())
 
+    # Date line uses candidate's own city (sender = applicant)
+    sender_city = PERSONAL['location']
+
+    # Recipient address block uses the JOB location (where the company is)
+    job_loc_display = job_location or PERSONAL['location']
+
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>{get_css()}</style></head>
 <body>
@@ -137,15 +154,18 @@ def build_html(company, role, recipient, body_paragraphs, language="en"):
             <div class="contact">
                 {PERSONAL['email']}<br>
                 {PERSONAL['phone']}<br>
-                {PERSONAL['location']}
+                {sender_city}
             </div>
             {photo_html}
         </div>
     </div>
 
-    <div class="date">{PERSONAL['location']}, {date_str}</div>
+    <div class="date">{sender_city}, {date_str}</div>
 
-    <div class="recipient">{company}</div>
+    <div class="recipient">
+        {company}<br>
+        {job_loc_display}
+    </div>
 
     <div class="subject">{subject}</div>
 
@@ -195,6 +215,8 @@ def main():
     parser.add_argument("--body", default=None, help="Paragraphs separated by ||")
     parser.add_argument("--body-file", default=None, help="Read body from file")
     parser.add_argument("--output", default=None, help="Output PDF path")
+    parser.add_argument("--job-location", default=None,
+                        help="Location of the JOB (used in the letter — NOT candidate's location)")
     args = parser.parse_args()
 
     if args.body_file and os.path.exists(args.body_file):
@@ -208,7 +230,11 @@ def main():
     output = args.output or f"./output/CL_{args.company.replace(' ', '_')}.pdf"
     os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
 
-    html = build_html(args.company, args.role, args.recipient, paragraphs, args.language)
+    html = build_html(
+        args.company, args.role, args.recipient,
+        paragraphs, args.language,
+        job_location=args.job_location,
+    )
     html_to_pdf(html, output)
 
 

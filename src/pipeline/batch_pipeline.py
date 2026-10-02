@@ -150,11 +150,40 @@ def detect_variant(title, description=""):
 
 
 def detect_language(title, company, location=""):
-    """Detect job language (de/en) from title and location."""
+    """Detect job language (de/en) from title, location, and company."""
     german_indicators = [
-        "referent", "sachbearbeiter", "koordinator", "berater",
-        "leiter", "mitarbeiter", "fachkraft", "beauftragter",
-        "deutschland", "germany", "hannover", "berlin", "muenchen",
+        # Job-title German keywords (any gender suffix /w/d, /m/w, m/f/d/x etc.)
+        "referent", "sachbearbeiter", "koordinator", "berater", "beraterin",
+        "leiter", "leiterin", "mitarbeiter", "mitarbeiterin", "fachkraft",
+        "beauftragter", "beauftragte", "geschäftsführer", "geschaeftsfuehrer",
+        "vertriebsleiter", "marketingleiter", "teamleiter", "bereichsleiter",
+        "abteilungsleiter", "geschäftsführung", "vorstand", "aufsichtsrat",
+        "spezialist", "spezialistin", "experte", "expertin",
+        # German job-title suffixes
+        "(m/w)", "(m/w/d)", "(m/w/d/x)", "(f/m/d)", "(w/m/d)",
+        # All DACH + DE-speaking cities (any DE company is likely DE-speaking)
+        "deutschland", "germany", "österreich", "oesterreich", "austria",
+        "schweiz", "switzerland",
+        # Top 50+ German cities
+        "berlin", "hamburg", "münchen", "muenchen", "munich", "köln", "koeln",
+        "cologne", "frankfurt", "stuttgart", "düsseldorf", "duesseldorf",
+        "dortmund", "essen", "leipzig", "bremen", "dresden", "hannover",
+        "nürnberg", "nuernberg", "duisburg", "bochum", "wuppertal", "bielefeld",
+        "bonn", "münster", "muenster", "karlsruhe", "mannheim", "augsburg",
+        "wiesbaden", "mönchengladbach", "moenchengladbach", "gelsenkirchen",
+        "braunschweig", "chemnitz", "kiel", "aachen", "magdeburg", "freiburg",
+        "krefeld", "lübeck", "luebeck", "oberhausen", "erfurt", "mainz",
+        "rostock", "kassel", "hagen", "saarbrücken", "saarbruecken",
+        "potsdam", "hamm", "ludwigshafen", "oldenburg", "leverkusen", "osnabrück",
+        "osnabrueck", "solingen", "heidelberg", "darmstadt", "regensburg",
+        "würzburg", "wuernburg", "ingolstadt", "ulm", "heilbronn", "reutlingen",
+        "tübingen", "tuebingen", "konstanz", "flensburg", "rostock",
+        "kaiserslautern", "trier", "jena", "cottbus", "göttingen", "goettingen",
+        # German-speaking Swiss cities
+        "zürich", "zurich", "genf", "geneva", "bern", "basel", "lausanne",
+        "luzern", "lucerne", "winterthur", "st. gallen",
+        # Austrian cities
+        "wien", "vienna", "salzburg", "innsbruck", "graz", "linz",
     ]
     text = f"{title} {company} {location}".lower()
     for indicator in german_indicators:
@@ -164,14 +193,49 @@ def detect_language(title, company, location=""):
 
 
 def _personal_from_env() -> dict:
-    """Read CANDIDATE_* env vars into a personal dict for templates."""
+    """Read CANDIDATE_* env vars into a personal dict for templates.
+
+    Falls back to JSON if env vars missing — keeps the ATS-template renderer
+    in sync with the JSON source-of-truth that cv_generator / cover_letter
+    also use (avoids 'Aarschot' in CV header + 'Brussels' in letter bug).
+    """
+    # Try JSON first (source of truth)
+    cv_data_path = Path(os.getenv(
+        "CV_DATA_PATH",
+        str(Path(__file__).resolve().parents[2] / "config" / "lars-cv-data.json"),
+    ))
+    json_data = {}
+    if cv_data_path.exists():
+        try:
+            json_data = json.loads(cv_data_path.read_text())
+        except Exception:
+            pass
+    personal = json_data.get("personal", {}) if isinstance(json_data, dict) else {}
+
+    # If env vars contain placeholder strings ("xxx", "example", etc.) or
+    # legacy values that disagree with JSON (Brussels vs Aarschot), let
+    # the JSON source-of-truth win.
+    def _is_placeholder(val: str) -> bool:
+        v = val.lower()
+        return any(p in v for p in ("xx xx", "xxx", "example", "your.", "brussels"))
+
+    env_location = os.getenv("CANDIDATE_LOCATION", "")
+    if _is_placeholder(env_location):
+        env_location = ""
+    env_phone = os.getenv("CANDIDATE_PHONE", "")
+    if _is_placeholder(env_phone):
+        env_phone = ""
+    env_email = os.getenv("CANDIDATE_EMAIL", "")
+    if _is_placeholder(env_email):
+        env_email = ""
+
     return {
-        "name": os.getenv("CANDIDATE_NAME", "Your Name"),
-        "title": os.getenv("CANDIDATE_TITLE", ""),
-        "location": os.getenv("CANDIDATE_LOCATION", "Berlin"),
-        "email": os.getenv("CANDIDATE_EMAIL", "your.email@example.com"),
-        "phone": os.getenv("CANDIDATE_PHONE", "+49 123 456789"),
-        "linkedin": os.getenv("CANDIDATE_LINKEDIN", ""),
+        "name": os.getenv("CANDIDATE_NAME", personal.get("name", "Your Name")),
+        "title": os.getenv("CANDIDATE_TITLE", personal.get("title_de", personal.get("title_en", ""))),
+        "location": env_location or personal.get("location", "Berlin"),
+        "email": env_email or personal.get("email", "your.email@example.com"),
+        "phone": env_phone or personal.get("phone", "+49 123 456789"),
+        "linkedin": os.getenv("CANDIDATE_LINKEDIN", personal.get("linkedin", "")),
     }
 
 
@@ -251,10 +315,28 @@ def generate_documents(job, output_dir):
     cv_path = os.path.join(job_dir, f"CV_{company_slug}.pdf")
     cl_path = os.path.join(job_dir, f"CL_{company_slug}.pdf")
 
+    # If env vars contain placeholder strings ("xxx", "example", etc.) or
+    # legacy values that disagree with JSON (Brussels vs Aarschot), strip
+    # them so the JSON source-of-truth wins.
+    def _is_placeholder(val: str) -> bool:
+        v = val.lower()
+        return any(p in v for p in ("xx xx", "xxx", "example", "your.", "brussels"))
+
+    if _is_placeholder(os.getenv("CANDIDATE_LOCATION", "")):
+        os.environ.pop("CANDIDATE_LOCATION", None)
+    if _is_placeholder(os.getenv("CANDIDATE_PHONE", "")):
+        os.environ.pop("CANDIDATE_PHONE", None)
+    if _is_placeholder(os.getenv("CANDIDATE_NAME", "")):
+        os.environ.pop("CANDIDATE_NAME", None)
+    if _is_placeholder(os.getenv("CANDIDATE_EMAIL", "")):
+        os.environ.pop("CANDIDATE_EMAIL", None)
+
+    env_for_subprocess = os.environ.copy()
+
     # Generate CV
     cv_cmd = f'{CV_GENERATOR} --company "{job.get("company", "")}" --tagline "{tagline}" --language {lang} --output "{cv_path}"'
     try:
-        subprocess.run(cv_cmd, shell=True, timeout=60, check=True, capture_output=True)
+        subprocess.run(cv_cmd, shell=True, timeout=60, check=True, capture_output=True, env=env_for_subprocess)
         log.info("  CV generated: %s", cv_path)
     except Exception as e:
         log.error("  CV generation failed: %s", e)
@@ -262,13 +344,20 @@ def generate_documents(job, output_dir):
 
     # Generate cover letter — opt-in ATS path (USE_ATS_TEMPLATES=1) uses our
     # templates + WHY-YOU YAML; otherwise fall back to dome317's subprocess CL.
+    job_location = job.get("location", "") or ""
     cl_result = None
     if USE_ATS_TEMPLATES:
         cl_result = _generate_cover_letter_ats(job, cl_path, variant, lang, tagline)
     if not cl_result:
+        # Pass --job-location so the letter shows Rostock/Berlin/Düsseldorf, NOT
+        # the candidate's Aarschot address in the recipient block.
         cl_cmd = f'{CL_GENERATOR} --company "{job.get("company", "")}" --role "{job.get("title", "")}" --language {lang} --output "{cl_path}"'
+        if job_location:
+            # Escape any quotes in the location string
+            loc_escaped = job_location.replace('"', '\\"')
+            cl_cmd += f' --job-location "{loc_escaped}"'
         try:
-            subprocess.run(cl_cmd, shell=True, timeout=60, check=True, capture_output=True)
+            subprocess.run(cl_cmd, shell=True, timeout=60, check=True, capture_output=True, env=env_for_subprocess)
             log.info("  CL generated (dome317 fallback): %s", cl_path)
             cl_result = cl_path
         except Exception as e:
