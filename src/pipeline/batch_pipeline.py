@@ -273,10 +273,28 @@ def _generate_cover_letter_ats(job, cl_path, variant, lang, variant_tagline):
         )
         close = "I'd welcome a 30-minute conversation to explore the fit."
 
+    # Recipient block — show JOB's location, NOT candidate's Aarschot address
+    job_location = job.get("location", "") or ""
+    if lang == "de":
+        recipient_block = (
+            f"{job.get('company', '')}<br>"
+            f"— Personalabteilung —<br>"
+            f"{job_location}"
+        )
+        salutation = "Sehr geehrte Damen und Herren,"
+    else:
+        recipient_block = (
+            f"{job.get('company', '')}<br>"
+            f"— Hiring Team —<br>"
+            f"{job_location}"
+        )
+        salutation = "Dear Hiring Team,"
+
     html = build_cover_letter_for_job(
         job=job, language=lang, variant=variant,
         personal=personal,
         opening=opening, me_paragraph=me_paragraph, close=close,
+        salutation=salutation, recipient_block=recipient_block,
     )
 
     with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8") as f:
