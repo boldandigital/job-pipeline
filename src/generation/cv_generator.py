@@ -281,8 +281,8 @@ def build_html(tagline, language="en", order=None):
 
 
 def html_to_pdf(html, output_path):
-    """Convert HTML to PDF using Patchright (headless Chromium)."""
-    from patchright.sync_api import sync_playwright
+    """Convert HTML to PDF using Playwright (headless Chromium)."""
+    from playwright.sync_api import sync_playwright
 
     with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8") as f:
         f.write(html)
@@ -290,7 +290,11 @@ def html_to_pdf(html, output_path):
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True, args=["--no-sandbox"])
+            browser = pw.chromium.launch(
+                headless=True,
+                args=["--no-sandbox"],
+                executable_path="/Users/lars/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+            )
             page = browser.new_page()
             page.goto(f"file://{tmp_path}", wait_until="networkidle")
             page.pdf(path=output_path, format="A4", print_background=True)

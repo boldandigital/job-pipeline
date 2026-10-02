@@ -282,6 +282,8 @@ log "─────────────────────────
 log "Lars daily pipeline START  (PID $$)"
 log "Project: $PROJECT_DIR"
 log "Python:  $PYTHON_BIN ($($PYTHON_BIN --version 2>&1))"
+export CV_GENERATOR="$PYTHON_BIN -m src.generation.cv_generator"
+export CL_GENERATOR="$PYTHON_BIN -m src.generation.cover_letter_generator"
 log "Discord: mode=$DISCORD_MODE  channel=${DISCORD_CHANNEL_ID:-${DISCORD_WEBHOOK_URL:0:40}…}"
 
 # Cold-start jitter — avoid stampede at exactly 09:00:00

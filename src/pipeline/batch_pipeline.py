@@ -179,7 +179,7 @@ def _generate_cover_letter_ats(job, cl_path, variant, lang, variant_tagline):
     """Render ATS-safe cover letter (HTML -> PDF via Patchright)."""
     try:
         from src.generation.ats_templates import build_cover_letter_for_job
-        from patchright.sync_api import sync_playwright
+        from playwright.sync_api import sync_playwright
         import tempfile
     except ImportError as e:
         log.error("  ATS templates not importable, skipping CL: %s", e)
@@ -192,7 +192,8 @@ def _generate_cover_letter_ats(job, cl_path, variant, lang, variant_tagline):
             f"{job.get('company', '')} hat mein großes Interesse geweckt."
         )
         me_paragraph = (
-            "Als Seriengründer und CTO bringe ich 4+ Jahre operative Erfahrung "
+            "Als Unternehmer mit zwei aktiven Firmen — Bold and Digital (Digitalagentur) "
+            "und HostSalt (Managed-Hosting) — bringe ich 4+ Jahre operative Erfahrung "
             "in der Skalierung digitaler Agenturen und Hosting-Plattformen mit."
         )
         close = "Ich freue mich auf ein persönliches Gespräch."
@@ -202,8 +203,9 @@ def _generate_cover_letter_ats(job, cl_path, variant, lang, variant_tagline):
             f"{job.get('company', '')} caught my attention immediately."
         )
         me_paragraph = (
-            "As a repeat founder and CTO, I bring 4+ years of operational "
-            "experience scaling digital agencies and hosting platforms."
+            "As an entrepreneur running two active companies — Bold and Digital "
+            "(digital agency) and HostSalt (managed hosting) — I bring 4+ years "
+            "of operational experience scaling digital agencies and hosting platforms."
         )
         close = "I'd welcome a 30-minute conversation to explore the fit."
 
@@ -218,7 +220,11 @@ def _generate_cover_letter_ats(job, cl_path, variant, lang, variant_tagline):
         tmp = f.name
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True, args=["--no-sandbox"])
+            browser = pw.chromium.launch(
+                headless=True,
+                args=["--no-sandbox"],
+                executable_path="/Users/lars/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+            )
             page = browser.new_page()
             page.goto(f"file://{tmp}", wait_until="networkidle")
             page.pdf(path=cl_path, format="A4", print_background=True)
