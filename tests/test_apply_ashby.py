@@ -70,8 +70,10 @@ def test_ashby_happy_path_combined_name(
     result = _run(ashby.apply(
         base_job, profile, tmp_cv, tmp_cover_letter, d,
     ))
-    assert result.success is True
-    assert result.submitted is True
+    # Ashby now pauses for human submit (safety rule per memory).
+    assert result.success is False
+    assert result.submitted is False
+    assert result.paused_for_review is True
     assert result.ats_type == "ashby"
     assert "name" in result.fields_filled
 
@@ -86,7 +88,10 @@ def test_ashby_happy_path_split_name(
     result = _run(ashby.apply(
         base_job, profile, tmp_cv, tmp_cover_letter, d,
     ))
-    assert result.success is True
+    # Ashby pauses for human submit (safety rule).
+    assert result.success is False
+    assert result.submitted is False
+    assert result.paused_for_review is True
     assert "first_name" in result.fields_filled
     assert "last_name" in result.fields_filled
 
