@@ -496,6 +496,15 @@ async def run_apply_pipeline(
             summary["jobs"].append({"id": job["id"], "result": "no_driver"})
             continue
 
+        # Open the career page BEFORE the adapter sees the driver — the
+        # adapter reads driver.page synchronously in many adapters.
+        career_url = job.get("career_url") or job.get("url") or ""
+        if career_url:
+            try:
+                await driver.open(career_url)
+            except Exception as exc:
+                log.warning("driver.open(%s) failed: %s", career_url, exc)
+
         result = await _apply_one(job, profile, cv_path, cover_path, driver)
 
         # Apply side effects: status + audit + Discord.
@@ -577,6 +586,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="Seconds to wait between applies (rate limit)")
     parser.add_argument("--dry-run", action="store_true",
                         help="List approved jobs without submitting")
+    parser.add_argument("--with-cua", action="store_true",
+                        help="Wire the local Playwright driver (NOT cua-driver MCP) "
+                             "and PAUSE before each submit. Per memory rule: explicit 'go' per apply.")
+    parser.add_argument("--headless", action="store_true",
+                        help="(with --with-cua) Run browser in headless mode. "
+                             "Default: visible browser window so you can review before submit.")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args(argv)
 
@@ -593,15 +608,33 @@ def main(argv: Optional[List[str]] = None) -> int:
                          indent=2, ensure_ascii=False, default=str))
         return 0
 
-    summary = asyncio.run(run_apply_pipeline(
-        db_path=args.db,
-        batches_dir=args.batches_dir,
-        logs_dir=args.logs_dir,
-        screenshots_dir=args.screenshots_dir,
-        job_id=args.job_id,
-        limit=args.limit,
-        delay_seconds=args.delay,
-    ))
+    driver_factory = None
+    if args.with_cua:
+        from src.apply.playwright_driver import PlaywrightDriverFactory
+
+        async def _run_with_driver():
+            async with PlaywrightDriverFactory(headless=args.headless) as factory:
+                return await run_apply_pipeline(
+                    db_path=args.db,
+                    batches_dir=args.batches_dir,
+                    logs_dir=args.logs_dir,
+                    screenshots_dir=args.screenshots_dir,
+                    job_id=args.job_id,
+                    limit=args.limit,
+                    delay_seconds=args.delay,
+                    driver_factory=factory,
+                )
+        summary = asyncio.run(_run_with_driver())
+    else:
+        summary = asyncio.run(run_apply_pipeline(
+            db_path=args.db,
+            batches_dir=args.batches_dir,
+            logs_dir=args.logs_dir,
+            screenshots_dir=args.screenshots_dir,
+            job_id=args.job_id,
+            limit=args.limit,
+            delay_seconds=args.delay,
+        ))
     print(json.dumps(summary, indent=2, ensure_ascii=False, default=str))
     # Cron-friendly exit code: 0 always (apply-cua never fails the cron
     # when at least one job was attempted; per-job outcomes are in JSON).

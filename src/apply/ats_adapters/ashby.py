@@ -205,29 +205,20 @@ class AshbyAdapter:
                 ats_type=self.ats_name, job_id=job_id, fields_filled=fields_filled,
             )
 
-        try:
-            await page.click(_SELECTORS["submit"])
-        except Exception as exc:  # noqa: BLE001
-            return ApplyResult(
-                success=False, error=f"submit click failed: {exc}",
-                screenshot_path=screenshot_path,
-                ats_type=self.ats_name, job_id=job_id, fields_filled=fields_filled,
-            )
-
-        await asyncio.sleep(0.3)
-        try:
-            await page.screenshot(screenshot_path.replace(".png", "-post.png"))
-        except Exception:  # noqa: BLE001
-            pass
-
-        return ApplyResult(
-            success=True,
+        # SAFETY CONTRACT (memory rule): NEVER auto-submit. Pause here so
+        # the human can review the form, take their own screenshot, and
+        # click Submit themselves. The driver remains open.
+        log.info(
+            "ashby: form filled, fields=%s, screenshot=%s — PAUSING for human review "
+            "(no auto-submit per memory rule)",
+            fields_filled, screenshot_path,
+        )
+        return apply_pause_for_review(
+            f"form filled, awaiting human submit click (fields: {', '.join(fields_filled)})",
+            ats_type=self.ats_name, job_id=job_id,
             screenshot_path=screenshot_path,
-            submitted=True,
-            ats_type=self.ats_name,
-            job_id=job_id,
             fields_filled=fields_filled,
         )
 
-
+# register_adapter stays below
 register_adapter(AshbyAdapter.ats_name, AshbyAdapter)
