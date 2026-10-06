@@ -1,0 +1,48 @@
+# .dockerignore.selfhost — keep the self-host image small and reproducible.
+# This file is consumed by the build-selfhost.sh script (passed via -f only).
+.git
+.gitignore
+.hermes
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Local data + dev artefacts
+data/
+logs/
+batches/
+screenshots/
+research/
+master/
+profiles/
+auto/
+docs/
+brand/
+templates/
+
+# Tests + fixtures (not needed at runtime in the image)
+tests/
+
+# Editor + OS junk
+.DS_Store
+.idea
+.vscode
+*.swp
+*.swo
+.env
+.env.local
+.env.*.local
+
+# Old/new compose files (not needed in image)
+Dockerfile
+Dockerfile.*
+docker-compose.yml
+docker-compose.*.yml
+.dockerignore
+.dockerignore.*

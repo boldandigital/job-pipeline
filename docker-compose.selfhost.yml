@@ -1,0 +1,42 @@
+# CaptainApply — Self-Host Compose (Phase 1.5)
+# One service. One volume. One command.
+#
+#   docker compose -f docker-compose.selfhost.yml up -d
+#   open http://localhost:8742
+#   log in with lars / captain  (CHANGE THE PASSWORD IMMEDIATELY)
+#
+# Production overrides — pass via env or a `.env` file in this dir:
+#   LARS_PASS=...
+#   LARS_USER=...
+#   CAPTAIN_SESSION_SECRET=...   # ≥44 chars, random. Without it cookies use the dev fallback.
+#   EXTRA_USERS=alice:alicepass,bob:bobpass
+
+services:
+  web:
+    image: captainapply/selfhost:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.selfhost
+    container_name: captainapply
+    restart: unless-stopped
+    ports:
+      - "8742:8742"
+    volumes:
+      - captainapply-data:/app/data
+    environment:
+      LARS_USER: ${LARS_USER:-lars}
+      LARS_PASS: ${LARS_PASS:-captain}
+      CAPTAIN_SESSION_SECRET: ${CAPTAIN_SESSION_SECRET:-}
+      EXTRA_USERS: ${EXTRA_USERS:-}
+      CAPTAIN_PROD: "1"
+      PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8742/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  captainapply-data:
+    name: captainapply-data

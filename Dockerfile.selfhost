@@ -1,0 +1,50 @@
+# CaptainApply — self-host tier (Phase 1.5)
+# Slim Python 3.11 image, no Chromium, no scrapers — just the webapp.
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System deps:
+#   - poppler-utils: for future PDF rendering (placeholder, harmless if unused)
+#   - libpq5:        PostgreSQL client lib (Phase 2+ multi-DB)
+#   - curl:          HEALTHCHECK
+#   - tini:          clean PID 1 signal handling for uvicorn
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    poppler-utils \
+    libpq5 \
+    curl \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python deps first — cache layer across code changes
+# We use a slim requirements file (webapp only) to keep the image under
+# 500MB. The full pipeline requirements (scrapers, PDF, sheets) stay in
+# requirements.txt and are not used by the selfhost image.
+COPY requirements.selfhost.txt /app/requirements.selfhost.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r /app/requirements.selfhost.txt \
+    && rm -f /app/requirements.selfhost.txt
+
+# Application code
+COPY src/ /app/src/
+COPY web/ /app/web/
+COPY config/ /app/config/
+COPY bin/ /app/bin/
+
+# Writable data directory for SQLite + PDF batches
+RUN mkdir -p /app/data
+ENV DB_PATH=/app/data/jobs.db
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV CAPTAIN_PROD=1
+ENV PORT=8742
+
+EXPOSE 8742
+
+# Healthcheck — /api/health is a no-auth liveness probe
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -fsS http://localhost:8742/api/health || exit 1
+
+# tini reaps zombies and forwards SIGTERM to uvicorn for clean container stop
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["bash", "-c", "exec python -m uvicorn src.web.app:app --host 0.0.0.0 --port 8742 --workers 1"]
