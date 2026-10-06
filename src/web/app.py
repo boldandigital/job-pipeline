@@ -38,8 +38,11 @@ from .auth import (
     check_bootstrap_admin,
     clear_session_cookie,
     current_user_id,
+    hash_password,
     set_session_cookie,
+    verify_password,
 )
+from . import rate_limit
 from .template import index_page
 
 log = logging.getLogger("web.app")
@@ -65,6 +68,21 @@ ADMIN_USER = os.getenv("LARS_USER", "lars")
 ADMIN_PASS = os.getenv("LARS_PASS", "captain")
 
 app = FastAPI(title="Job Approval UI", version="1.0.0")
+
+
+# ---------------------------------------------------------------------------
+# Startup: ensure global users DB schema exists (Phase 1.2)
+# ---------------------------------------------------------------------------
+
+@app.on_event("startup")
+def _ensure_users_schema() -> None:
+    """Phase 1.2: create data/users.db if missing. Idempotent."""
+    try:
+        from src.db import users_db as _users_db
+        _users_db.ensure_schema()
+        log.info("users_db schema ready at %s", _users_db.USERS_DB)
+    except Exception as exc:  # pragma: no cover — surface in logs only
+        log.warning("could not init users_db: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -384,32 +402,56 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class SignupRequest(BaseModel):
-    email: str
-    password: str
-    name: Optional[str] = None
-
-
 @app.post("/api/v1/auth/login")
 def auth_login(body: LoginRequest):
     """Verify credentials, set the session cookie, return the user info.
 
     Phase 1.1: only the bootstrap admin user (user_id='lars', env-var password).
-    Phase 1.2: real users table + bcrypt.
+    Phase 1.2: real users table + bcrypt (PBKDF2). Bootstrap admin still wins
+    via check_bootstrap_admin — keeps existing scripts working unchanged.
     """
-    if not check_bootstrap_admin(body.user_id, body.password):
+    # 1. Bootstrap admin — exact behaviour preserved
+    if check_bootstrap_admin(body.user_id, body.password):
+        response = JSONResponse(
+            {
+                "ok": True,
+                "user": {
+                    "id": body.user_id,
+                    "name": "Lars Zimmermann" if body.user_id == "lars" else body.user_id,
+                    "plan": "admin" if body.user_id == "lars" else "free",
+                },
+            }
+        )
+        set_session_cookie(response, body.user_id)
+        return response
+
+    # 2. Real users (Phase 1.2). user_id may be "lars" (admin in users DB)
+    # or an email address. Look up by id first, fall back to email.
+    from src.db import users_db as _users_db
+    row = _users_db.get_user_by_id(body.user_id)
+    if row is None and "@" in body.user_id:
+        row = _users_db.get_user_by_email(body.user_id)
+    if row is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not verify_password(body.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not row["verified"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Email not verified — check your inbox for the 6-digit code",
+        )
     response = JSONResponse(
         {
             "ok": True,
             "user": {
-                "id": body.user_id,
-                "name": "Lars Zimmermann" if body.user_id == "lars" else body.user_id,
-                "plan": "admin" if body.user_id == "lars" else "free",
+                "id": row["id"],
+                "email": row["email"],
+                "name": row["name"],
+                "plan": row["plan"] or "free",
             },
         }
     )
-    set_session_cookie(response, body.user_id)
+    set_session_cookie(response, row["id"])
     return response
 
 
@@ -421,13 +463,253 @@ def auth_logout():
     return response
 
 
+# ---------------------------------------------------------------------------
+# Phase 1.2 — signup, verify, forgot/reset (real users DB)
+# ---------------------------------------------------------------------------
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+    name: Optional[str] = None
+
+
+class VerifyRequest(BaseModel):
+    user_id: str
+    code: str
+
+
+class ForgotRequest(BaseModel):
+    email: str
+
+
+class ResetRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+def _client_ip(request: Request) -> str:
+    """Best-effort client IP. Honors X-Forwarded-For for proxy setups."""
+    fwd = request.headers.get("X-Forwarded-For")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    if request.client:
+        return request.client.host or "unknown"
+    return "unknown"
+
+
+@app.post("/api/v1/auth/signup")
+def auth_signup(body: SignupRequest, request: Request):
+    """Create a new user row and emit a 6-digit verify code (console in dev).
+
+    Returns:
+      200 { ok, user_id, verify_url, warnings? }    on success
+      400 { ok: false, error: 'invalid_email' }      on bad email
+      409 { ok: false, error: 'email_taken' }       on duplicates
+      429 { ok: false, error: 'rate_limited', retry_after }  on bucket empty
+
+    The verify_url is the path the UI can open to show a "enter code" form.
+    In dev mode the code itself is also logged to stdout (so the user can
+    copy-paste without checking fake email servers).
+    """
+    from src.db import users_db as _users_db
+
+    # 1. Email shape check
+    if not _users_db.is_valid_email(body.email):
+        return JSONResponse(
+            {"ok": False, "error": "invalid_email"},
+            status_code=400,
+        )
+
+    # 2. Rate limit (5 signups / IP / hour)
+    ip = _client_ip(request)
+    allowed, retry_after = rate_limit.rate_limit_signup(ip)
+    if not allowed:
+        return JSONResponse(
+            {"ok": False, "error": "rate_limited", "retry_after": retry_after},
+            status_code=429,
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # 3. Duplicate check (case-insensitive via normalise_email)
+    if _users_db.email_taken(body.email):
+        return JSONResponse(
+            {"ok": False, "error": "email_taken"},
+            status_code=409,
+        )
+
+    # 4. Build the row
+    pwd_hash = hash_password(body.password)
+    try:
+        uid = _users_db.create_user(
+            email=body.email,
+            password_hash=pwd_hash,
+            name=(body.name or None),
+            plan="free",
+        )
+    except Exception as exc:
+        # Defensive: another writer raced us on the unique index
+        log.warning("signup insert failed: %s", exc)
+        return JSONResponse(
+            {"ok": False, "error": "email_taken"},
+            status_code=409,
+        )
+
+    # 5. Issue verify code, log it
+    code = _users_db.generate_verify_code()
+    expires_at = _users_db.set_verify_code(uid, code)
+    log.info(
+        "[signup] %s code=%s expires=%s",
+        body.email, code, expires_at,
+    )
+    print(
+        f"\n⚓ CaptainApply verify code for {body.email}: {code}\n"
+        f"   expires at {expires_at}\n"
+        f"   user_id={uid}\n"
+    )
+
+    # 6. Soft warning for <10-char passwords (per spec: warn, don't fail)
+    warnings: list[str] = []
+    if _users_db.is_weak_password(body.password):
+        warnings.append("password_too_short")
+
+    return {
+        "ok": True,
+        "user_id": uid,
+        "verify_url": f"/app/verify?user_id={uid}",
+        "warnings": warnings,
+    }
+
+
+@app.post("/api/v1/auth/verify")
+def auth_verify(body: VerifyRequest):
+    """Consume a 6-digit code, mark the user verified, set a session cookie.
+
+    Returns:
+      200 { ok, user }  on success (Set-Cookie attached)
+      400 { ok: false, error: 'invalid_code' | 'too_many_attempts' | 'expired' }
+    """
+    from src.db import users_db as _users_db
+
+    user = _users_db.get_user_by_verify(body.user_id)
+    if user is None:
+        # Either no code on file, or already verified (and code was cleared).
+        # The "already verified" case should still succeed as a no-op.
+        existing = _users_db.get_user_by_id(body.user_id)
+        if existing and existing["verified"]:
+            response = JSONResponse(
+                {"ok": True, "user": _users_db.user_to_dict(existing), "already_verified": True}
+            )
+            set_session_cookie(response, existing["id"])
+            return response
+        return JSONResponse(
+            {"ok": False, "error": "no_pending_verification"},
+            status_code=400,
+        )
+
+    if user["verify_invalidated"]:
+        return JSONResponse(
+            {"ok": False, "error": "too_many_attempts"},
+            status_code=400,
+        )
+
+    # Expiry check
+    expires_at = user["verify_expires_at"]
+    if expires_at:
+        from datetime import datetime, timezone
+        try:
+            if datetime.now(timezone.utc) > datetime.fromisoformat(expires_at):
+                return JSONResponse(
+                    {"ok": False, "error": "expired"},
+                    status_code=400,
+                )
+        except Exception:
+            pass
+
+    # Code match (constant-time)
+    import hmac as _hmac
+    if not _hmac.compare_digest(str(user["verify_code"] or ""), str(body.code)):
+        attempts = _users_db.increment_verify_attempts(body.user_id)
+        if attempts >= _users_db.MAX_VERIFY_ATTEMPTS:
+            return JSONResponse(
+                {"ok": False, "error": "too_many_attempts"},
+                status_code=400,
+            )
+        return JSONResponse(
+            {"ok": False, "error": "invalid_code"},
+            status_code=400,
+        )
+
+    # Success
+    _users_db.mark_verified(body.user_id)
+    refreshed = _users_db.get_user_by_id(body.user_id)
+    if refreshed is None:
+        # Race: user deleted between code check and mark_verified. Should never
+        # happen in single-process dev but be defensive.
+        raise HTTPException(status_code=500, detail="user vanished mid-verify")
+    response = JSONResponse(
+        {"ok": True, "user": _users_db.user_to_dict(refreshed)}
+    )
+    set_session_cookie(response, body.user_id)
+    return response
+
+
+@app.post("/api/v1/auth/forgot")
+def auth_forgot(body: ForgotRequest):
+    """Generate a reset token (if the email exists) and always return 200.
+
+    Never reveals whether the email exists — that's the whole point of the
+    "always 200" shape. Token is printed to console in dev mode.
+    """
+    from src.db import users_db as _users_db
+
+    user = _users_db.get_user_by_email(body.email)
+    if user is not None:
+        token = _users_db.generate_reset_token()
+        expires_at = _users_db.set_reset_token(user["id"], token)
+        log.info(
+            "[forgot] %s token=%s expires=%s",
+            body.email, token, expires_at,
+        )
+        print(
+            f"\n⚓ CaptainApply reset token for {body.email}: {token}\n"
+            f"   expires at {expires_at}\n"
+        )
+    # No 'verify_url' — the token IS the URL.
+    return {"ok": True}
+
+
+@app.post("/api/v1/auth/reset")
+def auth_reset(body: ResetRequest):
+    """Consume a reset token and write the new password hash."""
+    from src.db import users_db as _users_db
+
+    user = _users_db.consume_reset_token(body.token)
+    if user is None:
+        return JSONResponse(
+            {"ok": False, "error": "invalid_or_expired_token"},
+            status_code=400,
+        )
+    if _users_db.is_weak_password(body.new_password):
+        return JSONResponse(
+            {"ok": False, "error": "password_too_short"},
+            status_code=400,
+        )
+    new_hash = hash_password(body.new_password)
+    _users_db.update_password(user["id"], new_hash)
+    _users_db.clear_reset_token(user["id"])
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+
+
 @app.get("/api/v1/auth/me")
 def auth_me(request: Request):
     """Return info about the currently signed-in user (or 401)."""
     uid = current_user_id(request)
     if not uid:
         raise HTTPException(status_code=401, detail="Not signed in")
-    # Phase 1.1: only the admin user exists
+    # Phase 1.1: bootstrap admin still wins
     if uid == "lars":
         return {
             "id": "lars",
@@ -435,7 +717,19 @@ def auth_me(request: Request):
             "plan": "admin",
             "email": "lars.z@icloud.com",
         }
-    return {"id": uid, "name": uid, "plan": "free"}
+    # Phase 1.2: real users table
+    from src.db import users_db as _users_db
+    row = _users_db.get_user_by_id(uid)
+    if row is not None:
+        return {
+            "id": row["id"],
+            "email": row["email"],
+            "name": row["name"] or "",
+            "plan": row["plan"] or "free",
+            "verified": bool(row["verified"]),
+        }
+    # Unknown UID — treat as signed-out
+    raise HTTPException(status_code=401, detail="Not signed in")
 
 
 # ---------------------------------------------------------------------------

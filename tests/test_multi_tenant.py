@@ -146,17 +146,25 @@ def test_connect_user_db_for_known_user_returns_existing(tmp_path, monkeypatch):
     conn.close()
 
 
-def test_connect_user_db_for_unknown_user_creates_empty_db(tmp_path, monkeypatch):
-    """Connecting to a never-seen user creates an empty DB file (no schema yet)."""
+def test_connect_user_db_for_unknown_user_creates_with_schema(tmp_path, monkeypatch):
+    """Connecting to a never-seen user auto-creates the jobs table schema.
+
+    This is the SaaS-ready behavior — a new signup should immediately be able to
+    see an empty dashboard, not hit a SQL error.
+    """
     test_user = "ghost_user_xyz"
     db_path = USERS_DIR / test_user / "jobs.db"
     if db_path.exists():
         db_path.unlink()
     conn = connect_user_db(test_user)
-    # DB file is created but schema is empty — caller (signup flow) must init
-    assert db_path.exists()
-    tables = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table'"
-    ).fetchall()
-    assert tables == [], f"Expected empty schema, got {tables}"
+    tables = sorted(
+        r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    )
+    # 'jobs' is required; sqlite_sequence is created by AUTOINCREMENT
+    assert "jobs" in tables, f"Expected jobs table, got {tables}"
+    # Empty table = zero rows
+    rows = conn.execute("SELECT COUNT(*) FROM jobs").fetchall()
+    assert rows[0][0] == 0
     conn.close()

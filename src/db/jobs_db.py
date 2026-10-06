@@ -102,12 +102,41 @@ def get_user_profile(user_id: str = ADMIN_USER_ID) -> dict[str, Any]:
         return {}
 
 
+# Schema applied to new users' jobs DB on first connect.
+# Mirrors the admin user's data/jobs.db schema so the dashboard works out of the box.
+_USER_JOBS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT,
+    company TEXT,
+    location TEXT,
+    url TEXT,
+    career_url TEXT,
+    source TEXT,
+    description TEXT,
+    score INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'new',
+    cv_path TEXT,
+    cover_letter_path TEXT,
+    created_at TEXT,
+    updated_at TEXT
+);
+"""
+
+
 def connect_user_db(user_id: str = ADMIN_USER_ID) -> sqlite3.Connection:
-    """Open a SQLite connection to the user's jobs DB (creates file if needed)."""
+    """Open a SQLite connection to the user's jobs DB (creates file + schema if needed).
+
+    For new users (user_id != 'lars'), the file at data/users/<id>/jobs.db is created
+    on first connect, and the minimal jobs schema is applied via CREATE TABLE IF NOT EXISTS.
+    For the admin user, this is a no-op schema-wise — the legacy data/jobs.db already
+    has the full schema from existing migrations.
+    """
     p = get_user_db_path(user_id)
-    if not p.exists() and user_id != ADMIN_USER_ID:
-        # First-time user — bootstrap from template
-        p.parent.mkdir(parents=True, exist_ok=True)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    is_new_user = user_id != ADMIN_USER_ID
+    if is_new_user and not p.exists():
+        # First-time user — bootstrap from template if present
         if USER_TEMPLATE_DIR.exists():
             tpl = USER_TEMPLATE_DIR / "jobs.db"
             if tpl.exists():
@@ -115,4 +144,8 @@ def connect_user_db(user_id: str = ADMIN_USER_ID) -> sqlite3.Connection:
                 shutil.copy(tpl, p)
     conn = sqlite3.connect(str(p))
     conn.row_factory = sqlite3.Row
+    # Ensure schema exists for any user (admin's legacy DB may also drift forward)
+    if is_new_user:
+        conn.executescript(_USER_JOBS_SCHEMA)
+        conn.commit()
     return conn
