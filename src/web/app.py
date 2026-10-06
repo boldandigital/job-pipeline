@@ -175,27 +175,33 @@ def _check_any_auth(request: Request) -> bool:
 def _connect(request: Request = None) -> sqlite3.Connection:
     """Open a connection to the current user's jobs DB.
 
-    Phase 1 single-tenant: uses the module-level DB_PATH (test-monkeypatchable).
-    Phase 4 multi-tenant: will resolve user_id from request.state.user_id and
-    return connect_user_db(user_id=...) instead. For now, the admin user
-    already maps to the legacy DB_PATH via jobs_db.LEGACY_DB.
+    Resolution order for the user_id:
+    1. request.state.user_id (production, set by the auth middleware)
+    2. LARS_USER_ID env var (CLI scripts + cron)
+    3. Admin fallback (so the function never fails)
+
+    For the admin user: prefer the module-level DB_PATH (test-monkeypatchable),
+    otherwise fall through to connect_user_db (which auto-creates schema).
+    For any other user: always go through connect_user_db (isolated DB + schema).
     """
-    from src.db.jobs_db import ADMIN_USER_ID, get_user_id
+    from src.db.jobs_db import ADMIN_USER_ID, connect_user_db, get_user_id
     env_user_id = os.getenv("LARS_USER_ID")
     request_user_id = None
     if request is not None and hasattr(request, "state") and hasattr(request.state, "user_id"):
         request_user_id = request.state.user_id
-    # If a per-user id is explicitly set in env/request AND it differs from
-    # the admin user, route to that user's isolated DB (Phase 4 readiness).
-    effective_user_id = request_user_id or env_user_id
-    if effective_user_id and effective_user_id != ADMIN_USER_ID:
-        from src.db.jobs_db import connect_user_db
-        return connect_user_db(user_id=effective_user_id)
-    # Default: use the module-level DB_PATH (which can be monkeypatched for tests,
-    # and which equals LEGACY_DB = data/jobs.db for production).
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    return conn
+    effective_user_id = request_user_id or env_user_id or ADMIN_USER_ID
+
+    if effective_user_id == ADMIN_USER_ID and str(DB_PATH) != str(_LEGACY_DB):
+        # Tests monkeypatch DB_PATH to a temp file — honor that for the admin user
+        conn = sqlite3.connect(str(DB_PATH))
+        conn.row_factory = sqlite3.Row
+        # Apply schema if missing (e.g. fresh test fixture)
+        from src.db.jobs_db import _USER_JOBS_SCHEMA
+        conn.executescript(_USER_JOBS_SCHEMA)
+        conn.commit()
+        return conn
+
+    return connect_user_db(user_id=effective_user_id)
 
 
 def _row_to_job(row: sqlite3.Row, batches_dir: Path) -> Dict[str, Any]:
@@ -733,6 +739,196 @@ def auth_me(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Phase 1.4 — Stripe billing (Checkout + Customer Portal + webhook)
+# ---------------------------------------------------------------------------
+
+class CheckoutRequest(BaseModel):
+    plan: str  # "solo" or "pro"
+
+
+def _billing_user_id(request: Request) -> str:
+    """Resolve a billing-scoped user_id.
+
+    The billing endpoints require a logged-in user (or at least the
+    bootstrap admin via legacy Basic auth) — they cannot run anonymously
+    because we need a user_id to attach the Stripe customer to.
+    """
+    if not _check_auth(request):
+        raise HTTPException(
+            status_code=401,
+            detail="Sign in to manage billing",
+            headers={"WWW-Authenticate": 'Basic realm="Captain\'s Bridge"'},
+        )
+    return request.state.user_id
+
+
+@app.post("/api/v1/billing/checkout")
+def billing_checkout(body: CheckoutRequest, request: Request):
+    """Create a Checkout session for the requested plan.
+
+    Returns ``{"url": ...}`` — either a real Stripe URL or a mock URL
+    in dev mode that points at /api/v1/billing/mock-checkout.
+    """
+    uid = _billing_user_id(request)
+    if body.plan not in ("solo", "pro"):
+        raise HTTPException(
+            status_code=400,
+            detail="plan must be 'solo' or 'pro'",
+        )
+    from src.billing import stripe_client as _stripe
+    session = _stripe.create_checkout_session(
+        user_id=uid,
+        plan=body.plan,
+    )
+    return {"ok": True, "url": session["url"], "session_id": session["session_id"]}
+
+
+@app.post("/api/v1/billing/portal")
+def billing_portal(request: Request):
+    """Create a Customer Portal session for the current user."""
+    uid = _billing_user_id(request)
+    from src.billing import stripe_client as _stripe
+    session = _stripe.create_customer_portal_session(user_id=uid)
+    return {"ok": True, "url": session["url"], "session_id": session["session_id"]}
+
+
+@app.get("/api/v1/billing/mock-checkout")
+def billing_mock_checkout(
+    request: Request,
+    session_id: str,
+    user_id: str = "",
+    plan: str = "solo",
+):
+    """DEV-MODE-ONLY confirmation page that synthesises a webhook.
+
+    The marketing page links /api/v1/billing/checkout → mock URL → this
+    endpoint. We render a tiny "thanks" page, build a fake
+    ``checkout.session.completed`` event, and run it through
+    ``handle_event`` so the user's plan row is updated exactly the way
+    a real Stripe webhook would have done.
+    """
+    from src.billing import stripe_client as _stripe
+    from src.billing.stripe_client import _is_dev_mode
+    if not _is_dev_mode():
+        # In production this endpoint should never be hit — it would be
+        # a sign someone is trying to forge a subscription.
+        raise HTTPException(status_code=404, detail="not found")
+
+    if not user_id:
+        user_id = _billing_user_id(request)
+    if plan not in ("solo", "pro"):
+        plan = "solo"
+
+    # Synthesise the same shape Stripe sends for checkout.session.completed
+    fake_event = {
+        "id": f"evt_dev_{session_id}",
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "id": session_id,
+                "mode": "subscription",
+                "client_reference_id": user_id,
+                "metadata": {"user_id": user_id, "plan": plan},
+                "line_items": {
+                    "data": [
+                        {
+                            "price": {"id": _stripe.PLAN_TO_PRICE.get(plan, "")},
+                        }
+                    ]
+                },
+            }
+        },
+    }
+    _stripe.handle_event(fake_event)
+
+    return HTMLResponse(
+        f"""<!doctype html>
+<html><head><meta charset='utf-8'><title>Mock checkout — CaptainApply</title>
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+          background: #FAFAFA; color: #0F172A; margin: 0; padding: 60px 20px; }}
+  .card {{ max-width: 480px; margin: 0 auto; background: #fff;
+           border: 1px solid #E2E8F0; border-radius: 12px; padding: 32px;
+           box-shadow: 0 4px 12px rgba(15,23,42,0.05); }}
+  h1 {{ font-size: 22px; margin: 0 0 8px; }}
+  p {{ color: #64748B; line-height: 1.5; }}
+  .badge {{ display: inline-block; background: #10B98122; color: #10B981;
+            padding: 2px 10px; border-radius: 99px; font-size: 12px;
+            font-weight: 500; margin-bottom: 16px; }}
+  a {{ display: inline-block; margin-top: 24px; background: #0F172A;
+        color: #fff; text-decoration: none; padding: 10px 20px;
+        border-radius: 6px; font-weight: 500; }}
+  code {{ background: #F1F5F9; padding: 1px 6px; border-radius: 4px; font-size: 12px; }}
+</style></head>
+<body>
+  <div class='card'>
+    <div class='badge'>DEV MODE</div>
+    <h1>Welcome aboard, Captain! ⚓</h1>
+    <p>Your <b>{plan}</b> plan is now active. (No card was charged — this is the mock-checkout flow.)</p>
+    <p>session: <code>{session_id}</code></p>
+    <a href='/app/?upgraded=1'>Open the Bridge →</a>
+  </div>
+</body></html>""",
+        status_code=200,
+    )
+
+
+@app.post("/api/v1/billing/webhook")
+async def billing_webhook(request: Request):
+    """Stripe webhook receiver. Verifies signature, dispatches to handler.
+
+    Note: this endpoint is NOT auth-gated by _check_auth — Stripe
+    authenticates the request via the signature header, not a session.
+    """
+    payload = await request.body()
+    sig_header = request.headers.get("Stripe-Signature", "")
+    from src.billing import stripe_client as _stripe
+    try:
+        event = _stripe.verify_webhook(payload, sig_header)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"webhook invalid: {exc}")
+    try:
+        _stripe.handle_event(event)
+    except Exception as exc:
+        # Don't 500 — Stripe will retry on non-2xx, which we don't want
+        # for logic bugs. Log and return 200.
+        log.exception("[stripe] handle_event failed: %s", exc)
+    return {"received": True}
+
+
+@app.get("/api/v1/billing/me")
+def billing_me(request: Request):
+    """Return the current user's plan + limits + usage block.
+
+    Used by the dashboard to render "5 / 10 jobs used" + the upgrade CTA.
+    """
+    uid = _billing_user_id(request)
+    from src.billing import quota as _quota
+    from src.billing import stripe_client as _stripe
+    plan = _quota.get_user_plan(uid)
+    limits = _quota.get_plan_limits(plan)
+    # Best-effort current usage (jobs row count + today's render count).
+    jobs_count = 0
+    renders_today = 0
+    try:
+        conn = _connect(request)
+        try:
+            jobs_count = conn.execute("SELECT COUNT(*) AS c FROM jobs").fetchone()["c"]
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    usage = _quota.build_usage_block(uid, jobs_count, renders_today)
+    return {
+        "user_id": uid,
+        "plan": plan,
+        "limits": limits,
+        "usage": usage,
+        "dev_mode": _stripe._is_dev_mode(),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Root
 # ---------------------------------------------------------------------------
 
@@ -769,7 +965,27 @@ def list_jobs(
     limit: int = 50,
 ):
     _require_auth(request)
-    return _fetch_jobs(request, status_filter=status, limit=limit)
+    jobs = _fetch_jobs(request, status_filter=status, limit=limit)
+    # Phase 1.4: attach quota usage to the response (soft-warn, no 403).
+    from src.billing import quota as _quota
+    try:
+        plan = _quota.get_user_plan(request.state.user_id)
+        limits = _quota.get_plan_limits(plan)
+        jobs_cap = limits["max_jobs"]
+        near = (jobs_cap > 0 and len(jobs) >= int(jobs_cap * 0.8))
+        exhausted = (jobs_cap > 0 and len(jobs) >= jobs_cap)
+        return JSONResponse(
+            jobs,
+            headers={
+                "X-Plan": plan,
+                "X-Usage-Jobs-Used": str(len(jobs)),
+                "X-Usage-Jobs-Cap": str(jobs_cap),
+                "X-Usage-Near-Limit": "1" if near else "0",
+                "X-Usage-Exhausted": "1" if exhausted else "0",
+            },
+        )
+    except Exception:
+        return jobs
 
 
 @app.get("/api/jobs/{job_id}")
@@ -837,7 +1053,6 @@ def stats(request: Request):
     finally:
         conn.close()
 
-
 # ---------------------------------------------------------------------------
 # API: serve PDFs (proxy via FastAPI so we can add auth)
 # ---------------------------------------------------------------------------
@@ -864,6 +1079,21 @@ def serve_batch_file(request: Request, path: str):
     if full.suffix.lower() != ".pdf":
         raise HTTPException(status_code=403, detail="only PDF allowed")
     return FileResponse(str(full), media_type="application/pdf")
+
+
+# ---------------------------------------------------------------------------
+# Phase 1.7 — XING Apply Assistant (semi-automated)
+# ---------------------------------------------------------------------------
+# Mounts the XING apply router which exposes:
+#   GET  /app/xing/<job_id>                  — helper page (HTML)
+#   GET  /api/v1/xing/fill/<job_id>          — field values (JSON)
+#   POST /api/v1/xing/ready/<job_id>         — flip status to 'queued'
+#   GET  /api/v1/xing/attachment/<job>/<k>  — serve CV/CL/message for download
+# Phase 1.7 import is deferred to here so that xing_apply.py can see the
+# auth + DB helpers it needs from this module (avoiding a circular import
+# at module-load time).
+from . import xing_apply as _xing_apply
+app.include_router(_xing_apply.router)
 
 
 # ---------------------------------------------------------------------------

@@ -129,8 +129,10 @@ def connect_user_db(user_id: str = ADMIN_USER_ID) -> sqlite3.Connection:
 
     For new users (user_id != 'lars'), the file at data/users/<id>/jobs.db is created
     on first connect, and the minimal jobs schema is applied via CREATE TABLE IF NOT EXISTS.
-    For the admin user, this is a no-op schema-wise — the legacy data/jobs.db already
-    has the full schema from existing migrations.
+    For the admin user, the same CREATE TABLE IF NOT EXISTS is also applied — this is a
+    no-op on the legacy data/jobs.db (schema already exists from earlier migrations) but
+    is essential when the legacy file is fresh (e.g. first Docker volume mount with an
+    empty data/jobs.db), which previously crashed /api/jobs with "no such table: jobs".
     """
     p = get_user_db_path(user_id)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -144,8 +146,7 @@ def connect_user_db(user_id: str = ADMIN_USER_ID) -> sqlite3.Connection:
                 shutil.copy(tpl, p)
     conn = sqlite3.connect(str(p))
     conn.row_factory = sqlite3.Row
-    # Ensure schema exists for any user (admin's legacy DB may also drift forward)
-    if is_new_user:
-        conn.executescript(_USER_JOBS_SCHEMA)
-        conn.commit()
+    # Ensure schema exists for any user (cheap; CREATE TABLE IF NOT EXISTS is idempotent)
+    conn.executescript(_USER_JOBS_SCHEMA)
+    conn.commit()
     return conn
