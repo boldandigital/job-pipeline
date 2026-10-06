@@ -3,44 +3,73 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Captain's Bridge · Job Approval · Lars Zimmermann</title>
-  <meta name="description" content="Single-page approval dashboard for Lars Zimmermann's automated job pipeline. Approve or skip jobs scraped from XING, StepStone, and Arbeitsagentur before the CUA bot submits." />
+  <title>CaptainApply · Job Approval · Captain's Bridge</title>
+  <meta name="description" content="4-gate progressive approval dashboard for CaptainApply. CV ok → Anschreiben ok → Motivation ok → Approve & Submit." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/index.css" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2306b6d4'/><text x='16' y='22' text-anchor='middle' font-size='18' font-family='Inter,sans-serif' font-weight='700' fill='white'>⚓</text></svg>" />
 </head>
 <body>
+  <div class="app" data-version="3-4gate">
 
-  <!-- v3: shadcn-style sidebar (left rail) -->
-  <div class="app">
+    <!-- ============================================
+         SIDEBAR (left rail)
+         ============================================ -->
     <aside class="sidebar" aria-label="Primary navigation">
       <div class="sidebar__brand">
         <div class="sidebar__brand-mark">⚓</div>
         <div>
           <div class="sidebar__brand-name">CaptainApply</div>
-          <div class="sidebar__brand-sub">v0.7.0 · localhost:8742</div>
+          <div class="sidebar__brand-sub">v3 · 4-gate approval</div>
         </div>
       </div>
 
       <nav class="sidebar__nav">
         <div>
           <div class="nav-section__title">Workspace</div>
-          <a class="nav-item is-active" href="#jobs"><span class="nav-item__icon">⚓</span> Job Bridge <span class="nav-item__badge" id="nav-badge">7</span></a>
-          <a class="nav-item" href="#approved"><span class="nav-item__icon">★</span> Approved <span class="nav-item__badge" id="nav-approved">0</span></a>
-          <a class="nav-item" href="#skipped"><span class="nav-item__icon">✗</span> Skipped <span class="nav-item__badge" id="nav-skipped">0</span></a>
+          <a class="nav-item is-active" href="#jobs">
+            <span class="nav-item__icon">⚓</span>
+            Job Bridge
+            <span class="nav-item__badge" id="nav-new-count">0</span>
+          </a>
+          <a class="nav-item" href="#approved">
+            <span class="nav-item__icon">★</span>
+            Approved
+            <span class="nav-item__badge" id="nav-approved-count">0</span>
+          </a>
+          <a class="nav-item" href="#skipped">
+            <span class="nav-item__icon">✗</span>
+            Skipped
+            <span class="nav-item__badge" id="nav-skipped-count">0</span>
+          </a>
         </div>
         <div>
           <div class="nav-section__title">Pipeline</div>
-          <a class="nav-item" href="#scrape"><span class="nav-item__icon">⌕</span> Scrape <span class="nav-item__badge">3</span></a>
-          <a class="nav-item" href="#render"><span class="nav-item__icon">▤</span> CV Render <span class="nav-item__badge">10</span></a>
-          <a class="nav-item" href="#submit"><span class="nav-item__icon">↗</span> Apply</a>
+          <a class="nav-item" href="#gates">
+            <span class="nav-item__icon">◐</span>
+            Gate Progress
+          </a>
+          <a class="nav-item" href="#submit">
+            <span class="nav-item__icon">↗</span>
+            Apply Channel
+          </a>
         </div>
         <div>
           <div class="nav-section__title">Account</div>
-          <a class="nav-item" href="#profile"><span class="nav-item__icon">◉</span> Profile</a>
-          <a class="nav-item" href="#settings"><span class="nav-item__icon">⚙</span> Settings</a>
+          <a class="nav-item" href="#" id="link-profile">
+            <span class="nav-item__icon">◉</span>
+            Profile
+          </a>
+          <a class="nav-item" href="#" id="link-settings">
+            <span class="nav-item__icon">⚙</span>
+            Settings
+          </a>
+          <a class="nav-item" href="#" id="link-logout">
+            <span class="nav-item__icon">⏻</span>
+            Sign out
+          </a>
         </div>
       </nav>
 
@@ -53,987 +82,572 @@
       </div>
     </aside>
 
+    <!-- ============================================
+         MAIN CANVAS
+         ============================================ -->
     <div class="main">
-
-  <!-- v3: topbar (sticky) — modern slim, breadcrumbs + search + actions -->
-  <header class="topbar" role="banner">
-    <div class="topbar__crumbs">
-      <span>Workspace</span>
-      <span class="sep">/</span>
-      <span>Job Bridge</span>
-    </div>
-
-    <div class="topbar__actions">
-      <label class="search" aria-label="Search jobs">
-        <span class="search__icon" aria-hidden="true">⌕</span>
-        <input type="search" placeholder="Search jobs…" />
-      </label>
-      <button class="btn btn--ghost btn--sm">⚙ Settings</button>
-      <div class="avatar" title="Lars Zimmermann">LZ</div>
-    </div>
-  </header>
-
-  <!-- ============================================
-       CONTENT
-       ============================================ -->
-  <main class="content" id="jobs">
-    <div class="page-header">
-      <div class="page-header__eyebrow">
-        <span class="dot"></span>
-        <span>Today's catch</span>
-        <span>·</span>
-        <span>ranked by match</span>
-      </div>
-      <h1 class="page-header__title" id="page-title">7 new roles — your move, Captain.</h1>
-      <div class="page-header__meta">
-        <span><strong>€65k</strong> salary floor</span>
-        <span>·</span>
-        <span><strong>3</strong> sources active</span>
-        <span>·</span>
-        <span><strong>3</strong> real jobs</span>
-        <span>·</span>
-        <span><strong>6</strong> ghosted</span>
-        <span>·</span>
-        <span><strong>94</strong> top match</span>
-      </div>
-    </div>
-
-  <!-- ============================================
-       HERO STRIP
-       ============================================ -->
-  <section class="hero">
-    <div class="hero__inner">
-      <div>
-        <p class="hero__eyebrow"><span aria-hidden="true">🏴‍☠️</span> Today's catch · ranked by Match</p>
-        <h1 class="hero__title">9 new roles, <em>3 clear fits</em> — your move, Captain.</h1>
-        <div class="hero__meta">
-          <span><b>€65k</b> salary floor</span>
-          <span><b>3</b> sources active</span>
-          <span><b>3</b> real jobs · <b>6</b> ghost</span>
-          <span><b>94</b> top match</span>
+      <header class="topbar" role="banner">
+        <div class="topbar__crumbs">
+          <span>Workspace</span>
+          <span class="sep">/</span>
+          <span>Job Bridge</span>
+          <span class="sep">/</span>
+          <span>4-gate approval</span>
         </div>
-      </div>
-      <div class="hero__date" aria-label="Captain's log timestamp">
-        <b>Captain's Log</b>
-        03 Oct 2026 · <span id="hero-clock">09:00</span><br />
-        Brussels · clear skies ☀️<br />
-        <span style="color: var(--cyan-300);">▲ 1 since yesterday</span>
-      </div>
-    </div>
-  </section>
+        <div class="topbar__actions">
+          <label class="search" aria-label="Search jobs">
+            <span class="search__icon" aria-hidden="true">⌕</span>
+            <input type="search" id="search" placeholder="Search jobs, companies, documents…" />
+            <kbd class="kbd">⌘K</kbd>
+          </label>
+          <button class="btn btn--ghost btn--sm" id="btn-refresh" title="Refresh">
+            <span aria-hidden="true">↻</span> Refresh
+          </button>
+          <div class="avatar" title="Lars Zimmermann" id="user-avatar">LZ</div>
+        </div>
+      </header>
 
-  <!-- ============================================
-       MAIN SHELL
-       ============================================ -->
-  <div class="shell">
+      <main class="content" id="jobs">
 
-    <!-- ============= MAIN ============= -->
-    <main class="main">
+        <!-- Eyebrow + header -->
+        <div class="page-header">
+          <div class="eyebrow">
+            <span class="eyebrow__bar"></span>
+            <span>Card approval workflow</span>
+            <span class="eyebrow__dot"></span>
+            <span>4 gates · final click is always yours</span>
+          </div>
+          <h1 class="page-header__title">Four gates before anything leaves the browser.</h1>
+          <p class="page-header__sub">Every assignment opens at gate 01. CV, Anschreiben and Motivation unlock in order, and the submit button stays dark until all three carry your approval.</p>
 
-      <section aria-labelledby="grid-h">
-        <div class="section-head">
-          <h2 id="grid-h"><span class="marker" aria-hidden="true">⚓</span> Anchor · top 3 + 6 ghosted</h2>
-          <div class="section-head__sub">click a card to expand in place · <kbd style="background: var(--navy-800); color: var(--slate-400); padding: 1px 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 10px;">↵</kbd> open · <kbd style="background: var(--navy-800); color: var(--slate-400); padding: 1px 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 10px;">A</kbd> approve · <kbd style="background: var(--navy-800); color: var(--slate-400); padding: 1px 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 10px;">S</kbd> skip</div>
+          <div class="stats-row" id="stats-row">
+            <div class="stat">
+              <div class="stat__num" id="stat-awaiting">0</div>
+              <div class="stat__label">Awaiting review</div>
+            </div>
+            <div class="stat">
+              <div class="stat__num" id="stat-ready">0</div>
+              <div class="stat__label">Ready to submit</div>
+            </div>
+            <div class="stat">
+              <div class="stat__num" id="stat-submitted">0</div>
+              <div class="stat__label">Submitted</div>
+            </div>
+            <div class="stat">
+              <div class="stat__num" id="stat-skipped">0</div>
+              <div class="stat__label">Skipped</div>
+            </div>
+          </div>
         </div>
 
-        <div class="jobs-grid" id="jobs-grid">
+        <!-- Loading skeleton -->
+        <div class="cards" id="loading-state" hidden>
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+        </div>
 
-          <!-- ============================================
-               REAL JOB 1 — Zasta Karriere · 94 · Chief of Staff
-               ============================================ -->
-          <article class="job-card is-real" data-job-id="j1" data-score="94" data-raw-score="2200" data-source="xing" data-url="https://www.xing.com/jobs/zasta" tabindex="0" aria-expanded="false">
-            <header class="job-card__head">
-              <div class="score" aria-label="Match score 94">
-                <svg class="score__ring" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
-                  <circle class="score__bg" cx="20" cy="20" r="17"></circle>
-                  <circle class="score__fg" cx="20" cy="20" r="17" stroke="url(#grad-cyan)" stroke-dasharray="106.81" stroke-dashoffset="6.41"></circle>
-                </svg>
-                <span class="score__num">94</span>
-              </div>
-              <div>
-                <h3 class="job-card__title">Chief of Staff (m/w/d)</h3>
-                <p class="job-card__company"><span>Zasta Karriere</span> <span class="sep">·</span> <span class="loc">Rostock</span></p>
-              </div>
-            </header>
-            <div class="job-card__meta">
-              <span class="job-card__salary">€60–75k</span>
-              <span class="tag tag--src xing">XING</span>
-              <span class="tag tag--match">C2 + 12y fit</span>
-            </div>
-            <p class="job-card__teaser">Direkter Sparringspartner der Geschäftsführung · 3 Standorte · Mecklenburg-Vorpommern · hybrid.</p>
+        <!-- Empty state -->
+        <div class="empty-state" id="empty-state" hidden>
+          <div class="empty-state__icon">⚓</div>
+          <h2 class="empty-state__title">No assignments in review.</h2>
+          <p class="empty-state__sub">The scraper runs at 09:00 Berlin. New roles land here every morning. Cap'n 10:01.</p>
+        </div>
 
-            <!-- =========== EXPANDED DETAIL (in place) =========== -->
-            <div class="job-detail" role="region" aria-label="Job details for Zasta Karriere">
-              <div class="job-detail__head">
-                <div>
-                  <h4 class="job-detail__title">Chief of Staff (m/w/d) — Zasta Karriere</h4>
-                  <p class="job-detail__sub">Rostock · €60–75k · XING · posted 1d ago · ref: zk-cos-2026-307</p>
-                </div>
-                <a class="job-detail__open-xing" href="https://www.xing.com/jobs/zasta" target="_blank" rel="noopener">
-                  <span aria-hidden="true">↗</span> Open in XING
-                </a>
-              </div>
+        <!-- The grid — rendered by JS from /api/jobs -->
+        <div class="cards" id="jobs-grid"></div>
 
-              <div class="job-detail__body">
-                <!-- LEFT col: Why + description -->
-                <div class="job-detail__main">
-                  <h5 class="job-detail__h"><span class="marker" style="color: var(--green);">✓</span> Why this fits Lars</h5>
-                  <ol class="why">
-                    <li class="why__item"><span class="why__icon">1</span><span><b>Chief of Staff</b> passt 1:1 zu deiner Founder/COO-Erfahrung — du hast schon Axon-Operations geführt, weißt wie Geschäftsführung tickt.</span></li>
-                    <li class="why__item"><span class="why__icon">2</span><span><b>Gehalt €60–75k</b> liegt über deinem €65k-Floor · Standort Rostock = Rückkehr in deine Heimatregion, keine Relocation-Kosten.</span></li>
-                    <li class="why__item"><span class="why__icon">3</span><span><b>3 Standorte · hybrid</b> — du behältst Remote-Flex, Zasta ist im Aufbau (Strukturierung statt Greenfield), typische CoS-Rolle.</span></li>
-                    <li class="why__item"><span class="why__icon">4</span><span><b>DE C2 + EN C2</b> beides bestätigt · XING-Source = 96% Datenqualität, kein Recruiter-Spam · Match 94 = Top 1% der Pipeline.</span></li>
-                  </ol>
-
-                  <h5 class="job-detail__h" style="margin-top: var(--s-5);"><span class="marker">⚓</span> Role</h5>
-                  <div class="job-detail__desc">
-                    <p>Wir suchen eine unternehmerisch denkende <b>Chief of Staff (m/w/d)</b>, die/der die Geschäftsführung der <b>Zasta Gruppe</b> operativ entlastet und strategische Initiativen eigenständig vorantreibt. Die Zasta Gruppe betreibt drei Standorte in Mecklenburg-Vorpommern und befindet sich in einer Skalierungsphase nach einer Series-B-ähnlichen Wachstumsrunde im Frühjahr 2026.</p>
-                    <p>Du arbeitest direkt mit dem CEO zusammen, koordinierst die drei Standortleitungen, bereitest Board-Meetings vor und treibst bereichsübergreifende Projekte (Digitalisierung, Personal, Expansion) eigenverantwortlich. Du bist <b>kein Office Manager</b> — du bist Sparringspartner:in auf Augenhöhe, übersetzt Strategie in Execution und sorgst dafür, dass Entscheidungen der GF im Unternehmen ankommen und umgesetzt werden.</p>
-                    <p><b>Stack &amp; Tools:</b> moderne SaaS-Landschaft (Microsoft 365, Notion, Salesforce), kein Legacy. Reporting direkt an CEO, kein CFO zwischengeschaltet. Reiseanteil: ca. 1 Tag/Woche zwischen den Standorten Rostock, Schwerin und Wismar.</p>
-                    <p><b>Was wir bieten:</b> überdurchschnittliche Work-Life-Balance (38h-Woche, keine Wochenendarbeit), betriebliche Altersvorsorge, JobRad, Deutschlandticket. Standort: Rostock oder hybrid aus dem Hamburger Raum (1–2 Tage vor Ort).</p>
-                    <p><b>Was du mitbringst:</b> 5+ Jahre Erfahrung in einer vergleichbaren CoS-, COO- oder Senior-Consulting-Rolle in einem mittelständischen oder scale-up Umfeld. Du denkst in Outcomes, nicht in Tickets, und kannst komplexe Stakeholder-Landschaften navigieren, ohne politisch zu werden. Deutsch auf muttersprachlichem Niveau, Englisch verhandlungssicher.</p>
-                  </div>
-                </div>
-
-                <!-- RIGHT col: PDF previews -->
-                <aside class="job-detail__side">
-                  <h5 class="job-detail__h" style="color: var(--slate-700);"><span class="marker" style="color: var(--cyan-500);">📄</span> CV preview</h5>
-                  <div class="pdf" aria-label="CV PDF preview">
-                    <div class="pdf__head"><b>Lars_Zimmermann_CV.pdf</b> · <span>2 pages</span></div>
-                    <div class="pdf__body">
-                      <div class="pdf__name">Lars Zimmermann</div>
-                      <div style="color: var(--slate-500); font-size: 9.5px; margin-bottom: 8px;">Founder · Engineering Leader · Berlin / Brussels</div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line short"></div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line" style="width: 80%;"></div>
-                      <div style="height: 4px;"></div>
-                      <div class="pdf__line thin" style="width: 40%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 90%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 70%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 85%; background: var(--slate-200);"></div>
-                      <a class="pdf__view-full" href="#cv-full">↗ View full CV</a>
-                    </div>
-                  </div>
-
-                  <h5 class="job-detail__h" style="color: var(--slate-700);"><span class="marker" style="color: var(--cyan-500);">✉</span> Anschreiben preview</h5>
-                  <div class="pdf" aria-label="Anschreiben PDF preview">
-                    <div class="pdf__head"><b>Lars_Zimmermann_Zasta_CoS.pdf</b> · <span>1 page</span></div>
-                    <div class="pdf__body">
-                      <div class="pdf__name">Sehr geehrte Frau Dr. Berg,</div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line" style="width: 92%;"></div>
-                      <div class="pdf__line" style="width: 75%;"></div>
-                      <div style="height: 4px;"></div>
-                      <div class="pdf__line thin" style="width: 90%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 60%; background: var(--slate-200);"></div>
-                      <a class="pdf__view-full" href="#anschreiben-full">↗ View full Anschreiben</a>
-                    </div>
-                  </div>
-                </aside>
-              </div>
-
-              <!-- Sticky action bar -->
-              <div class="job-detail__bar" role="toolbar" aria-label="Decision actions">
-                <div class="job-detail__bar-left">
-                  <span class="meta">Selected: <b>Zasta Karriere · Chief of Staff</b></span>
-                </div>
-                <div class="job-detail__bar-right">
-                  <button class="btn btn--lg btn--skip" data-act="skip" data-target="j1"><span aria-hidden="true">✗</span> Skip</button>
-                  <button class="btn btn--lg btn--xing" data-act="open-xing" data-target="j1"><span aria-hidden="true">↗</span> Open in XING</button>
-                  <button class="btn btn--lg btn--primary" data-act="approve" data-target="j1"><span aria-hidden="true">★</span> Approve &amp; queue submit</button>
-                </div>
-              </div>
-            </div>
-            <!-- /job-detail -->
-
-            <footer class="job-card__foot">
-              <button class="btn btn--ghost" data-act="open" data-target="j1">Open ↗</button>
-              <button class="btn btn--approve" data-act="approve" data-target="j1">★ Approve</button>
-              <button class="btn btn--skip" data-act="skip" data-target="j1">✗ Skip</button>
-            </footer>
-          </article>
-
-          <!-- ============================================
-               REAL JOB 2 — Andercore · 88 · CoS Strategy AI
-               ============================================ -->
-          <article class="job-card is-real" data-job-id="j2" data-score="88" data-raw-score="1940" data-source="xing" data-url="https://www.xing.com/jobs/andercore" tabindex="0" aria-expanded="false">
-            <header class="job-card__head">
-              <div class="score" aria-label="Match score 88">
-                <svg class="score__ring" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
-                  <circle class="score__bg" cx="20" cy="20" r="17"></circle>
-                  <circle class="score__fg" cx="20" cy="20" r="17" stroke="url(#grad-cyan)" stroke-dasharray="106.81" stroke-dashoffset="12.82"></circle>
-                </svg>
-                <span class="score__num">88</span>
-              </div>
-              <div>
-                <h3 class="job-card__title">Chief of Staff — Strategy / AI Enablement</h3>
-                <p class="job-card__company"><span>Andercore</span> <span class="sep">·</span> <span class="loc">Berlin</span></p>
-              </div>
-            </header>
-            <div class="job-card__meta">
-              <span class="job-card__salary">€100–130k OTE</span>
-              <span class="tag tag--src xing">XING</span>
-              <span class="tag tag--match">AI · Series B</span>
-            </div>
-            <p class="job-card__teaser">AI-Consulting Scale-up · Reports to CEO · Berlin Mitte · 4 Tage/Woche vor Ort.</p>
-
-            <div class="job-detail" role="region" aria-label="Job details for Andercore">
-              <div class="job-detail__head">
-                <div>
-                  <h4 class="job-detail__title">Chief of Staff — Strategy / AI Enablement — Andercore</h4>
-                  <p class="job-detail__sub">Berlin · €100–130k OTE · XING · posted 1d ago · ref: ac-cos-ai-2026-412</p>
-                </div>
-                <a class="job-detail__open-xing" href="https://www.xing.com/jobs/andercore" target="_blank" rel="noopener">
-                  <span aria-hidden="true">↗</span> Open in XING
-                </a>
-              </div>
-
-              <div class="job-detail__body">
-                <div class="job-detail__main">
-                  <h5 class="job-detail__h"><span class="marker" style="color: var(--green);">✓</span> Why this fits Lars</h5>
-                  <ol class="why">
-                    <li class="why__item"><span class="why__icon">1</span><span><b>€100–130k OTE</b> = höchste Stufe der Pipeline · AI-Enablement passt zu deinem Trader-Bot- + Hindsight-Hintergrund (LLM-Operations).</span></li>
-                    <li class="why__item"><span class="why__icon">2</span><span><b>CoS-rolle</b> trifft dein Profil erneut · Series B = genau die Phase, in der deine Skalierungserfahrung aus Axon am wertvollsten ist.</span></li>
-                    <li class="why__item"><span class="why__icon">3</span><span><b>Berlin Mitte · 4d on-site</b> ist akzeptabel · du hast schon in Berlin gelebt, kein Relocation nötig · öffentlich gut angebunden.</span></li>
-                    <li class="why__item"><span class="why__icon">4</span><span><b>AI-Strategy-Komponente</b> = Differentiator · du baust bereits mit Hindsight/LLMs · das ist nicht "buzzword AI", sondern echte Operations.</span></li>
-                  </ol>
-
-                  <h5 class="job-detail__h" style="margin-top: var(--s-5);"><span class="marker">⚓</span> Role</h5>
-                  <div class="job-detail__desc">
-                    <p><b>Andercore</b> ist ein 75-Personen AI-Consulting Scale-up (Series B, €42M raised 03/2026), das Mid-Market-Kunden bei der Einführung von LLM-Workflows begleitet. Wir suchen eine/n <b>Chief of Staff</b> mit klarem Schwerpunkt auf Strategy und AI Enablement — du arbeitest direkt mit dem CEO und übernimmst die Querschnittsfunktion zwischen Delivery, Sales und Product.</p>
-                    <p><b>Deine Mission:</b> du übersetzt die "AI-Vision" des CEO in eine execution-fähige Strategie für die 75-Personen-Org. Du baust ein internes AI-Enablement-Programm (für die 75 Mitarbeiter:innen), bereitest die nächste Series-C-Roadmap vor und steuerst bereichsübergreifende Initiativen — von Pricing-Modellen bis Hiring-Plan.</p>
-                    <p><b>Konkrete Projekte (erste 90 Tage):</b> (1) Bestandsaufnahme der aktuellen AI-Tool-Nutzung bei allen 75 Mitarbeiter:innen, (2) Aufbau eines monatlichen "AI in Delivery"-Reports an CEO + Board, (3) Co-Lead der Series-C-Pitch-Deck-Vorbereitung, (4) Hiring-Plan für 25 neue Köpfe 2027.</p>
-                    <p><b>Was wir bieten:</b> €100–130k OTE (70/30 base/variable), 0.5% Equity (4-year vest, 1-year cliff), Urban Sports Club, BVG-Ticket, modernes Office in Berlin Mitte (Punkt für Punkt: Alexa, nicht Prenzlauer). 28 Urlaubstage + ½ Tag pro Quartal für "Innovation Friday".</p>
-                    <p><b>Was du mitbringst:</b> 6+ Jahre in Strategy/Operations-Rolle, idealerweise mit Tech/AI-Bezug. Du musst kein Engineer sein, aber du verstehst, was LLMs können und was nicht, und kannst es C-Level-Kunden erklären. Top-Tier-Slide-Skills (Pitch-Deck, Board-Decks) sind Pflicht. Deutsch C2, Englisch C2.</p>
-                  </div>
-                </div>
-
-                <aside class="job-detail__side">
-                  <h5 class="job-detail__h" style="color: var(--slate-700);"><span class="marker" style="color: var(--cyan-500);">📄</span> CV preview</h5>
-                  <div class="pdf" aria-label="CV PDF preview">
-                    <div class="pdf__head"><b>Lars_Zimmermann_CV.pdf</b> · <span>2 pages</span></div>
-                    <div class="pdf__body">
-                      <div class="pdf__name">Lars Zimmermann</div>
-                      <div style="color: var(--slate-500); font-size: 9.5px; margin-bottom: 8px;">Founder · Engineering Leader · Berlin / Brussels</div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line short"></div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line" style="width: 80%;"></div>
-                      <div style="height: 4px;"></div>
-                      <div class="pdf__line thin" style="width: 40%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 90%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 70%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 85%; background: var(--slate-200);"></div>
-                      <a class="pdf__view-full" href="#cv-full">↗ View full CV</a>
-                    </div>
-                  </div>
-
-                  <h5 class="job-detail__h" style="color: var(--slate-700);"><span class="marker" style="color: var(--cyan-500);">✉</span> Anschreiben preview</h5>
-                  <div class="pdf" aria-label="Anschreiben PDF preview">
-                    <div class="pdf__head"><b>Lars_Zimmermann_Andercore_CoS.pdf</b> · <span>1 page</span></div>
-                    <div class="pdf__body">
-                      <div class="pdf__name">Sehr geehrter Herr Dr. Anders,</div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line" style="width: 92%;"></div>
-                      <div class="pdf__line" style="width: 75%;"></div>
-                      <div style="height: 4px;"></div>
-                      <div class="pdf__line thin" style="width: 90%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 60%; background: var(--slate-200);"></div>
-                      <a class="pdf__view-full" href="#anschreiben-full">↗ View full Anschreiben</a>
-                    </div>
-                  </div>
-                </aside>
-              </div>
-
-              <div class="job-detail__bar" role="toolbar" aria-label="Decision actions">
-                <div class="job-detail__bar-left">
-                  <span class="meta">Selected: <b>Andercore · CoS Strategy AI</b></span>
-                </div>
-                <div class="job-detail__bar-right">
-                  <button class="btn btn--lg btn--skip" data-act="skip" data-target="j2"><span aria-hidden="true">✗</span> Skip</button>
-                  <button class="btn btn--lg btn--xing" data-act="open-xing" data-target="j2"><span aria-hidden="true">↗</span> Open in XING</button>
-                  <button class="btn btn--lg btn--primary" data-act="approve" data-target="j2"><span aria-hidden="true">★</span> Approve &amp; queue submit</button>
-                </div>
-              </div>
-            </div>
-
-            <footer class="job-card__foot">
-              <button class="btn btn--ghost" data-act="open" data-target="j2">Open ↗</button>
-              <button class="btn btn--approve" data-act="approve" data-target="j2">★ Approve</button>
-              <button class="btn btn--skip" data-act="skip" data-target="j2">✗ Skip</button>
-            </footer>
-          </article>
-
-          <!-- ============================================
-               REAL JOB 3 — xHeron Solutions · 82 · Founding Marketer
-               ============================================ -->
-          <article class="job-card is-real" data-job-id="j3" data-score="82" data-raw-score="1810" data-source="xing" data-url="https://www.xing.com/jobs/xheron" tabindex="0" aria-expanded="false">
-            <header class="job-card__head">
-              <div class="score" aria-label="Match score 82">
-                <svg class="score__ring" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
-                  <circle class="score__bg" cx="20" cy="20" r="17"></circle>
-                  <circle class="score__fg" cx="20" cy="20" r="17" stroke="url(#grad-cyan)" stroke-dasharray="106.81" stroke-dashoffset="19.22"></circle>
-                </svg>
-                <span class="score__num">82</span>
-              </div>
-              <div>
-                <h3 class="job-card__title">Founding Marketer (m/w/d)</h3>
-                <p class="job-card__company"><span>xHeron Solutions</span> <span class="sep">·</span> <span class="loc">Berlin</span></p>
-              </div>
-            </header>
-            <div class="job-card__meta">
-              <span class="job-card__salary">€60–75k + 1.0%</span>
-              <span class="tag tag--src xing">XING</span>
-              <span class="tag tag--match">Founder track</span>
-            </div>
-            <p class="job-card__teaser">Pre-Seed B2B-SaaS · 3 Personen · Reports to CEO · Berlin · remote-first.</p>
-
-            <div class="job-detail" role="region" aria-label="Job details for xHeron Solutions">
-              <div class="job-detail__head">
-                <div>
-                  <h4 class="job-detail__title">Founding Marketer (m/w/d) — xHeron Solutions</h4>
-                  <p class="job-detail__sub">Berlin (remote-first) · €60–75k + 1.0% equity · XING · posted 1d ago · ref: xh-fm-2026-018</p>
-                </div>
-                <a class="job-detail__open-xing" href="https://www.xing.com/jobs/xheron" target="_blank" rel="noopener">
-                  <span aria-hidden="true">↗</span> Open in XING
-                </a>
-              </div>
-
-              <div class="job-detail__body">
-                <div class="job-detail__main">
-                  <h5 class="job-detail__h"><span class="marker" style="color: var(--green);">✓</span> Why this fits Lars</h5>
-                  <ol class="why">
-                    <li class="why__item"><span class="why__icon">1</span><span><b>Founding Marketer</b> = Rolle #4 oder #5 im Team · du wirst nicht "Marketing-Manager", du <i>baut</i> Marketing von 0 auf.</span></li>
-                    <li class="why__item"><span class="why__icon">2</span><span><b>1.0% Equity + €60–75k</b> bei Pre-Seed-Stage = beste Asymmetrie der Pipeline · wenn das Ding wächst, ist das Material.</span></li>
-                    <li class="why__item"><span class="why__icon">3</span><span><b>remote-first</b> — du sitzt in Berlin, kannst aber auch in Brüssel arbeiten, 1 Sync/Woche in Berlin.</span></li>
-                    <li class="why__item"><span class="why__icon">4</span><span><b>B2B-SaaS-Founder-Pattern</b> = du hast das schon zweimal gemacht (Axon, Jts) · du weißt, was Founder-Speed bedeutet.</span></li>
-                  </ol>
-
-                  <h5 class="job-detail__h" style="margin-top: var(--s-5);"><span class="marker">⚓</span> Role</h5>
-                  <div class="job-detail__desc">
-                    <p><b>xHeron Solutions</b> ist ein 3-Personen Pre-Seed-Startup aus Berlin, das eine B2B-SaaS-Lösung für mittelständische Logistik-Unternehmen baut (Yard-Management, €8k ACV). Wir haben im April 2026 eine €800k Pre-Seed-Runde geschlossen und suchen jetzt die/den <b>erste:n Marketer:in</b> im Team.</p>
-                    <p><b>Deine Mission:</b> du baust das gesamte Marketing von 0 auf — Website, Content, Outbound, Positioning, Pricing-Page, die ersten 50 Pilot-Kunden. Du arbeitest direkt mit dem CEO, reportest monatlich an die Pre-Seed-Investoren und bist Co-Owner:in der GTM-Strategie.</p>
-                    <p><b>Konkrete Liefer-Items (erste 6 Monate):</b> (1) Neue Website mit klarem Positioning (Fertig: Monat 1), (2) Outbound-System für die ersten 50 Pilots (Fertig: Monat 2), (3) Content-Engine: 2 Case Studies/Monat, 1 Newsletter/Woche, (4) Pricing-Page A/B-Test-Suite (Fertig: Monat 3), (5) Erste €40k ARR (Fertig: Monat 6).</p>
-                    <p><b>Was wir bieten:</b> €60–75k (verhandelbar basierend auf deiner Seniorität), 1.0% Equity (4-year vest, 1-year cliff), komplette Remote-Flex, moderne Tool-Chain (Linear, Notion, Customer.io, Webflow), monatliches Coaching mit einem unserer Seed-Investoren (ex-CMO Celonis).</p>
-                    <p><b>Was du mitbringst:</b> 3+ Jahre B2B-Marketing-Erfahrung, idealerweise in einem SaaS-Startup zwischen €0–€1M ARR. Du hast schon mal eine Outbound-Engine gebaut, die funktioniert hat. Du bist comfortabel damit, in einem 3-Personen-Team "alles" zu machen — heute schreibst du LinkedIn-Posts, morgen schraubst du an der Pricing-Page, übermorgen sprichst du mit Pilot-Kunden. Deutsch C2, Englisch C2.</p>
-                  </div>
-                </div>
-
-                <aside class="job-detail__side">
-                  <h5 class="job-detail__h" style="color: var(--slate-700);"><span class="marker" style="color: var(--cyan-500);">📄</span> CV preview</h5>
-                  <div class="pdf" aria-label="CV PDF preview">
-                    <div class="pdf__head"><b>Lars_Zimmermann_CV.pdf</b> · <span>2 pages</span></div>
-                    <div class="pdf__body">
-                      <div class="pdf__name">Lars Zimmermann</div>
-                      <div style="color: var(--slate-500); font-size: 9.5px; margin-bottom: 8px;">Founder · Engineering Leader · Berlin / Brussels</div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line short"></div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line" style="width: 80%;"></div>
-                      <div style="height: 4px;"></div>
-                      <div class="pdf__line thin" style="width: 40%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 90%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 70%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 85%; background: var(--slate-200);"></div>
-                      <a class="pdf__view-full" href="#cv-full">↗ View full CV</a>
-                    </div>
-                  </div>
-
-                  <h5 class="job-detail__h" style="color: var(--slate-700);"><span class="marker" style="color: var(--cyan-500);">✉</span> Anschreiben preview</h5>
-                  <div class="pdf" aria-label="Anschreiben PDF preview">
-                    <div class="pdf__head"><b>Lars_Zimmermann_xHeron_FM.pdf</b> · <span>1 page</span></div>
-                    <div class="pdf__body">
-                      <div class="pdf__name">Sehr geehrter Herr Dr. Heron,</div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line"></div>
-                      <div class="pdf__line" style="width: 92%;"></div>
-                      <div class="pdf__line" style="width: 75%;"></div>
-                      <div style="height: 4px;"></div>
-                      <div class="pdf__line thin" style="width: 90%; background: var(--slate-200);"></div>
-                      <div class="pdf__line thin" style="width: 60%; background: var(--slate-200);"></div>
-                      <a class="pdf__view-full" href="#anschreiben-full">↗ View full Anschreiben</a>
-                    </div>
-                  </div>
-                </aside>
-              </div>
-
-              <div class="job-detail__bar" role="toolbar" aria-label="Decision actions">
-                <div class="job-detail__bar-left">
-                  <span class="meta">Selected: <b>xHeron Solutions · Founding Marketer</b></span>
-                </div>
-                <div class="job-detail__bar-right">
-                  <button class="btn btn--lg btn--skip" data-act="skip" data-target="j3"><span aria-hidden="true">✗</span> Skip</button>
-                  <button class="btn btn--lg btn--xing" data-act="open-xing" data-target="j3"><span aria-hidden="true">↗</span> Open in XING</button>
-                  <button class="btn btn--lg btn--primary" data-act="approve" data-target="j3"><span aria-hidden="true">★</span> Approve &amp; queue submit</button>
-                </div>
-              </div>
-            </div>
-
-            <footer class="job-card__foot">
-              <button class="btn btn--ghost" data-act="open" data-target="j3">Open ↗</button>
-              <button class="btn btn--approve" data-act="approve" data-target="j3">★ Approve</button>
-              <button class="btn btn--skip" data-act="skip" data-target="j3">✗ Skip</button>
-            </footer>
-          </article>
-
-          <!-- ============================================
-               GHOST JOB 1 — Helm & Walter · 71
-               ============================================ -->
-          <article class="job-card is-ghost" data-job-id="g1" data-score="71" data-source="xing" data-url="https://www.xing.com/jobs/helm" tabindex="0" aria-expanded="false">
-            <header class="job-card__head">
-              <div class="score" aria-label="Match score 71">
-                <svg class="score__ring" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
-                  <circle class="score__bg" cx="20" cy="20" r="17"></circle>
-                  <circle class="score__fg" cx="20" cy="20" r="17" stroke="url(#grad-cyan)" stroke-dasharray="106.81" stroke-dashoffset="30.98"></circle>
-                </svg>
-                <span class="score__num">71</span>
-              </div>
-              <div>
-                <h3 class="job-card__title">Head of Operations</h3>
-                <p class="job-card__company"><span>Helm &amp; Walter</span> <span class="sep">·</span> <span class="loc">Hamburg</span></p>
-              </div>
-            </header>
-            <div class="job-card__meta">
-              <span class="job-card__salary">€70–85k</span>
-              <span class="tag tag--src xing">XING</span>
-              <span class="tag tag--match">Maritime</span>
-            </div>
-            <p class="job-card__teaser">Mittelständische Reederei · 220 MA · Restrukturierung · on-site Hamburg.</p>
-            <footer class="job-card__foot">
-              <button class="btn btn--ghost" data-act="open" data-target="g1">Open ↗</button>
-              <button class="btn btn--approve" data-act="approve" data-target="g1">★ Approve</button>
-              <button class="btn btn--skip" data-act="skip" data-target="g1">✗ Skip</button>
-            </footer>
-          </article>
-
-          <!-- ============================================
-               GHOST JOB 2 — NordBau · 64
-               ============================================ -->
-          <article class="job-card is-ghost" data-job-id="g2" data-score="64" data-source="stepstone" data-url="https://www.stepstone.de/jobs/nordbau" tabindex="0" aria-expanded="false">
-            <header class="job-card__head">
-              <div class="score" aria-label="Match score 64">
-                <svg class="score__ring" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
-                  <circle class="score__bg" cx="20" cy="20" r="17"></circle>
-                  <circle class="score__fg" cx="20" cy="20" r="17" stroke="url(#grad-cyan)" stroke-dasharray="106.81" stroke-dashoffset="38.32"></circle>
-                </svg>
-                <span class="score__num">64</span>
-              </div>
-              <div>
-                <h3 class="job-card__title">Senior Strategy Manager</h3>
-                <p class="job-card__company"><span>NordBau AG</span> <span class="sep">·</span> <span class="loc">Schwerin</span></p>
-              </div>
-            </header>
-            <div class="job-card__meta">
-              <span class="job-card__salary">€65–80k</span>
-              <span class="tag tag--src stepstone">StepStone</span>
-              <span class="tag tag--match">Bau/Infra</span>
-            </div>
-            <p class="job-card__teaser">Baukonzern · 1.200 MA · M&amp;A-Projekte · Schwerin + 1d Hamburg.</p>
-            <footer class="job-card__foot">
-              <button class="btn btn--ghost" data-act="open" data-target="g2">Open ↗</button>
-              <button class="btn btn--approve" data-act="approve" data-target="g2">★ Approve</button>
-              <button class="btn btn--skip" data-act="skip" data-target="g2">✗ Skip</button>
-            </footer>
-          </article>
-
-          <!-- ============================================
-               GHOST JOB 3 — Becker & Söhne · 58
-               ============================================ -->
-          <article class="job-card is-ghost" data-job-id="g3" data-score="58" data-source="xing" data-url="https://www.xing.com/jobs/becker" tabindex="0" aria-expanded="false">
-            <header class="job-card__head">
-              <div class="score" aria-label="Match score 58">
-                <svg class="score__ring" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
-                  <circle class="score__bg" cx="20" cy="20" r="17"></circle>
-                  <circle class="score__fg" cx="20" cy="20" r="17" stroke="url(#grad-cyan)" stroke-dasharray="106.81" stroke-dashoffset="44.86"></circle>
-                </svg>
-                <span class="score__num">58</span>
-              </div>
-              <div>
-                <h3 class="job-card__title">Chief of Staff (m/w/d)</h3>
-                <p class="job-card__company"><span>Becker &amp; Söhne</span> <span class="sep">·</span> <span class="loc">München</span></p>
-              </div>
-            </header>
-            <div class="job-card__meta">
-              <span class="job-card__salary">€90–110k</span>
-              <span class="tag tag--src xing">XING</span>
-              <span class="tag tag--match">Familienunternehmen</span>
-            </div>
-            <p class="job-card__teaser">Maschinenbau-Familienunternehmen · 8. Generation · München on-site.</p>
-            <footer class="job-card__foot">
-              <button class="btn btn--ghost" data-act="open" data-target="g3">Open ↗</button>
-              <button class="btn btn--approve" data-act="approve" data-target="g3">★ Approve</button>
-              <button class="btn btn--skip" data-act="skip" data-target="g3">✗ Skip</button>
-            </footer>
-          </article>
-
-          <!-- ============================================
-               GHOST JOB 4 — Küstenkraft · 51
-               ============================================ -->
-          <article class="job-card is-ghost" data-job-id="g4" data-score="51" data-source="arbeitsagentur" data-url="https://www.arbeitsagentur.de/jobs/kuestenkraft" tabindex="0" aria-expanded="false">
-            <header class="job-card__head">
-              <div class="score" aria-label="Match score 51">
-                <svg class="score__ring" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
-                  <circle class="score__bg" cx="20" cy="20" r="17"></circle>
-                  <circle class="score__fg" cx="20" cy="20" r="17" stroke="url(#grad-cyan)" stroke-dasharray="106.81" stroke-dashoffset="52.34"></circle>
-                </svg>
-                <span class="score__num">51</span>
-              </div>
-              <div>
-                <h3 class="job-card__title">Operations Lead (m/w/d)</h3>
-                <p class="job-card__company"><span>Küstenkraft GmbH</span> <span class="sep">·</span> <span class="loc">Kiel</span></p>
-              </div>
-            </header>
-            <div class="job-card__meta">
-              <span class="job-card__salary">€55–70k</span>
-              <span class="tag tag--src arbeitsagentur">Arbeitsagentur</span>
-              <span class="tag tag--match">Energie</span>
-            </div>
-            <p class="job-card__teaser">Windpark-Betreiber · 95 MA · Standort Kiel · 3d vor Ort.</p>
-            <footer class="job-card__foot">
-              <button class="btn btn--ghost" data-act="open" data-target="g4">Open ↗</button>
-              <button class="btn btn--approve" data-act="approve" data-target="g4">★ Approve</button>
-              <button class="btn btn--skip" data-act="skip" data-target="g4">✗ Skip</button>
-            </footer>
-          </article>
-
-          <!-- ============================================
-               GHOST JOB 5 — Hanseatic AI · 47
-               ============================================ -->
-          <article class="job-card is-ghost" data-job-id="g5" data-score="47" data-source="xing" data-url="https://www.xing.com/jobs/hanseatic" tabindex="0" aria-expanded="false">
-            <header class="job-card__head">
-              <div class="score" aria-label="Match score 47">
-                <svg class="score__ring" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
-                  <circle class="score__bg" cx="20" cy="20" r="17"></circle>
-                  <circle class="score__fg" cx="20" cy="20" r="17" stroke="url(#grad-cyan)" stroke-dasharray="106.81" stroke-dashoffset="56.62"></circle>
-                </svg>
-                <span class="score__num">47</span>
-              </div>
-              <div>
-                <h3 class="job-card__title">Founding Engineer (m/w/d)</h3>
-                <p class="job-card__company"><span>Hanseatic AI</span> <span class="sep">·</span> <span class="loc">Rostock</span></p>
-              </div>
-            </header>
-            <div class="job-card__meta">
-              <span class="job-card__salary">€80–100k</span>
-              <span class="tag tag--src xing">XING</span>
-              <span class="tag tag--match">AI/ML</span>
-            </div>
-            <p class="job-card__teaser">Maritime Computer-Vision · 4-Personen Team · Rostock on-site.</p>
-            <footer class="job-card__foot">
-              <button class="btn btn--ghost" data-act="open" data-target="g5">Open ↗</button>
-              <button class="btn btn--approve" data-act="approve" data-target="g5">★ Approve</button>
-              <button class="btn btn--skip" data-act="skip" data-target="g5">✗ Skip</button>
-            </footer>
-          </article>
-
-          <!-- ============================================
-               GHOST JOB 6 — Acker & Zeit · 39
-               ============================================ -->
-          <article class="job-card is-ghost" data-job-id="g6" data-score="39" data-source="linkedin" data-url="https://www.linkedin.com/jobs/acker" tabindex="0" aria-expanded="false">
-            <header class="job-card__head">
-              <div class="score" aria-label="Match score 39">
-                <svg class="score__ring" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
-                  <circle class="score__bg" cx="20" cy="20" r="17"></circle>
-                  <circle class="score__fg" cx="20" cy="20" r="17" stroke="url(#grad-cyan)" stroke-dasharray="106.81" stroke-dashoffset="65.16"></circle>
-                </svg>
-                <span class="score__num">39</span>
-              </div>
-              <div>
-                <h3 class="job-card__title">Brand Director (m/w/d)</h3>
-                <p class="job-card__company"><span>Acker &amp; Zeit</span> <span class="sep">·</span> <span class="loc">Berlin</span></p>
-              </div>
-            </header>
-            <div class="job-card__meta">
-              <span class="job-card__salary">€70–90k</span>
-              <span class="tag tag--src linkedin">LinkedIn</span>
-              <span class="tag tag--match">Consumer Brand</span>
-            </div>
-            <p class="job-card__teaser">D2C Food Brand · Series A · 35 MA · Berlin Mitte.</p>
-            <footer class="job-card__foot">
-              <button class="btn btn--ghost" data-act="open" data-target="g6">Open ↗</button>
-              <button class="btn btn--approve" data-act="approve" data-target="g6">★ Approve</button>
-              <button class="btn btn--skip" data-act="skip" data-target="g6">✗ Skip</button>
-            </footer>
-          </article>
-
-        </div><!-- /jobs-grid -->
-
-        <!-- Captain's Log ticker (live, 30s interval) -->
+        <!-- Footer status -->
         <div class="log" role="contentinfo" aria-live="polite">
           <span class="marker" aria-hidden="true">🏴‍☠️</span>
-          <span class="log__msg" id="log-msg">Pipeline status: <b>idle</b> · waiting on Captain's decision · next auto-fit sweep in <b>14 min</b></span>
-          <span class="log__time" id="log-time">⏱ 09:00:14</span>
+          <span class="log__msg" id="log-msg">Pipeline: idle · Captain in command.</span>
+          <span class="log__time" id="log-time">⏱ --:--:--</span>
         </div>
 
-      </section>
-    </main>
-    </div><!-- /main -->
-
-    <!-- v3: hide the v2 right rail (replaced by the new sidebar) -->
-    <style>.shell > .rail, .shell .rail { display: none !important; }</style>
-    <style>.shell { display: block !important; grid-template-columns: 1fr !important; }</style>
-    <style>.hero { display: none !important; }</style>  <!-- v2 hero is replaced by v3 page-header -->
-
-    <!-- ============= RIGHT RAIL (v2) — hidden by CSS above ============= -->
-    <aside class="rail hidden" aria-label="Pipeline statistics sidebar">
-
-      <!-- Captain widget -->
-      <div class="widget widget--dark" id="captain">
-        <div class="widget__head">
-          <span class="marker" aria-hidden="true">⚓</span>
-          <h3>Captain</h3>
-        </div>
-        <div class="captain">
-          <a class="avatar" href="#" title="Lars Zimmermann">LZ</a>
-          <div>
-            <div class="captain__name">Lars Zimmermann</div>
-            <div class="captain__role">Founder · 12+ yrs · DE/EN C2</div>
-            <span class="captain__pill"><span style="width:6px;height:6px;border-radius:50%;background: var(--green); box-shadow: 0 0 6px var(--green); display: inline-block;"></span> Online · Brussels</span>
-          </div>
-        </div>
-        <div class="divider divider--dark"></div>
-        <div class="stats">
-          <div>
-            <div class="stat__num stat__num--mono">12<span style="font-size:12px;color:var(--slate-400);">+ yrs</span></div>
-            <div class="stat__label">Experience</div>
-          </div>
-          <div>
-            <div class="stat__num stat__num--mono">€65k</div>
-            <div class="stat__label">Salary floor</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Today widget -->
-      <div class="widget">
-        <div class="widget__head">
-          <span class="marker" aria-hidden="true">📦</span>
-          <h3>Today · 03 Oct</h3>
-        </div>
-        <div class="stats">
-          <div>
-            <div class="stat__num stat__num--cyan">9</div>
-            <div class="stat__label">New jobs</div>
-            <div class="stat__delta">▲ 2 vs avg</div>
-          </div>
-          <div>
-            <div class="stat__num stat__num--green">3</div>
-            <div class="stat__label">Auto-fit</div>
-            <div class="stat__delta">▲ 1 vs avg</div>
-          </div>
-          <div>
-            <div class="stat__num">2</div>
-            <div class="stat__label">Pending</div>
-            <div class="stat__delta stat__delta--down">▼ -1</div>
-          </div>
-          <div>
-            <div class="stat__num">0</div>
-            <div class="stat__label">Applied</div>
-            <div class="stat__delta">awaiting ★</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Week widget -->
-      <div class="widget">
-        <div class="widget__head">
-          <span class="marker" aria-hidden="true">📈</span>
-          <h3>This week</h3>
-        </div>
-        <div class="stats">
-          <div>
-            <div class="stat__num">47</div>
-            <div class="stat__label">Jobs scraped</div>
-          </div>
-          <div>
-            <div class="stat__num stat__num--cyan">12</div>
-            <div class="stat__label">Fits (&gt;75)</div>
-          </div>
-          <div>
-            <div class="stat__num stat__num--green">3</div>
-            <div class="stat__label">Approved</div>
-          </div>
-          <div>
-            <div class="stat__num stat__num--red">8</div>
-            <div class="stat__label">Skipped</div>
-          </div>
-        </div>
-        <div class="divider"></div>
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--slate-500);">
-          <span>Avg match</span>
-          <span style="font-family: var(--font-mono); font-weight: 600; color: var(--slate-900);">76.4</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--slate-500); margin-top:6px;">
-          <span>Conversion</span>
-          <span style="font-family: var(--font-mono); font-weight: 600; color: var(--green);">6.4% approved</span>
-        </div>
-      </div>
-
-      <!-- Pipeline widget -->
-      <div class="widget" id="pipeline">
-        <div class="widget__head">
-          <span class="marker" aria-hidden="true">🧭</span>
-          <h3>Pipeline state</h3>
-        </div>
-        <ol class="pipeline" aria-label="Pipeline stages">
-          <li class="step is-done">
-            <span class="step__dot">✓</span>
-            <span class="step__label">Scrape <small>XING · StepStone · AA</small></span>
-            <span class="step__time">08:42</span>
-          </li>
-          <li class="step is-done">
-            <span class="step__dot">✓</span>
-            <span class="step__label">Score <small>CV match · 0–100</small></span>
-            <span class="step__time">08:48</span>
-          </li>
-          <li class="step is-done">
-            <span class="step__dot">✓</span>
-            <span class="step__label">Render <small>CV + Anschreiben PDFs</small></span>
-            <span class="step__time">08:55</span>
-          </li>
-          <li class="step is-active">
-            <span class="step__dot">4</span>
-            <span class="step__label">Awaiting ★ <small>Captain's approval</small></span>
-            <span class="step__time">now</span>
-          </li>
-          <li class="step is-pending">
-            <span class="step__dot">5</span>
-            <span class="step__label">CUA submit <small>Playwright auto-form</small></span>
-            <span class="step__time">pending</span>
-          </li>
-          <li class="step is-pending">
-            <span class="step__dot">6</span>
-            <span class="step__label">Log response <small>SQLite · status update</small></span>
-            <span class="step__time">pending</span>
-          </li>
-        </ol>
-      </div>
-
-      <!-- Sources widget -->
-      <div class="widget">
-        <div class="widget__head">
-          <span class="marker" aria-hidden="true">🗺</span>
-          <h3>Sources · last 24h</h3>
-        </div>
-        <div style="display:flex; flex-direction: column; gap: 8px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px;">
-            <span class="tag tag--src xing">XING</span>
-            <span style="font-family: var(--font-mono); color: var(--slate-500);">28 jobs · 7 fit</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px;">
-            <span class="tag tag--src stepstone">StepStone</span>
-            <span style="font-family: var(--font-mono); color: var(--slate-500);">11 jobs · 3 fit</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px;">
-            <span class="tag tag--src arbeitsagentur">Arbeitsagentur</span>
-            <span style="font-family: var(--font-mono); color: var(--slate-500);">5 jobs · 1 fit</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px;">
-            <span class="tag tag--src linkedin">LinkedIn</span>
-            <span style="font-family: var(--font-mono); color: var(--slate-500);">3 jobs · 0 fit</span>
-          </div>
-        </div>
-      </div>
-
-    </aside>
-  </div><!-- /shell -->
+      </main>
+    </div>
+  </div>
 
   <!-- ============================================
-       INTERACTIVITY
+       TEMPLATES (cloned per job)
        ============================================ -->
+  <template id="tpl-job-card">
+    <article class="card" data-job-id="" data-state="">
+      <header class="card__head">
+        <div class="card__id">
+          <span class="card__id-num"></span>
+          <span class="card__company"></span>
+        </div>
+        <div class="card__score" aria-label="Match score">
+          <svg class="score__ring" viewBox="0 0 40 40" width="44" height="44" aria-hidden="true">
+            <circle class="score__bg" cx="20" cy="20" r="17"></circle>
+            <circle class="score__fg" cx="20" cy="20" r="17"></circle>
+          </svg>
+          <span class="score__num"></span>
+        </div>
+      </header>
+
+      <h2 class="card__title"></h2>
+      <div class="card__meta">
+        <span class="card__location"></span>
+        <span class="card__sep">·</span>
+        <span class="card__arrangement"></span>
+      </div>
+
+      <div class="card__chips">
+        <span class="chip chip--salary"></span>
+        <span class="chip chip--source"></span>
+      </div>
+
+      <!-- The 4-gate progressive approval strip -->
+      <div class="gates" role="group" aria-label="Approval gates">
+
+        <div class="gate" data-stage="cv" data-state="locked">
+          <span class="gate__idx mono">01</span>
+          <span class="gate__mark" aria-hidden="true">○</span>
+          <div class="gate__txt">
+            <span class="gate__label">CV ok</span>
+            <span class="gate__note mono">Ready to review · unlocks gate 02</span>
+          </div>
+          <button class="gate__act" data-gate-act="mark">✓ Mark ok</button>
+        </div>
+
+        <div class="gate" data-stage="anschreiben" data-state="locked">
+          <span class="gate__idx mono">02</span>
+          <span class="gate__mark" aria-hidden="true">○</span>
+          <div class="gate__txt">
+            <span class="gate__label">Anschreiben ok</span>
+            <span class="gate__note mono">Locked · waiting on gate 01</span>
+          </div>
+          <button class="gate__act" data-gate-act="mark">✓ Mark ok</button>
+        </div>
+
+        <div class="gate" data-stage="motivation" data-state="locked">
+          <span class="gate__idx mono">03</span>
+          <span class="gate__mark" aria-hidden="true">○</span>
+          <div class="gate__txt">
+            <span class="gate__label">Motivation ok</span>
+            <span class="gate__note mono">Locked · waiting on gate 02</span>
+          </div>
+          <button class="gate__act" data-gate-act="mark">✓ Mark ok</button>
+        </div>
+
+        <div class="approve" data-state="disabled">
+          <button class="approve__btn" data-act="approve" disabled>
+            <span aria-hidden="true">★</span>
+            <span class="approve__btn-label">Approve & Submit</span>
+          </button>
+          <span class="approve__counter mono">0 of 3 gates approved.</span>
+          <button class="btn btn--skip-inline" data-act="skip" title="Skip this role">
+            <span aria-hidden="true">✗</span> Skip
+          </button>
+        </div>
+      </div>
+    </article>
+  </template>
+
   <script>
-  (function () {
+  (async function () {
     'use strict';
 
-    // ----- counters -----
-    const counters = { approved: 0, skipped: 0 };
+    // ============== CONFIG ==============
+    const DASHBOARD_LIMIT = 6;      // card brief: top 6 by score
+    const SCORE_MAX = 2500;         // ring arc normalises against the raw max
+    const HIDDEN_STATUSES = ['batched'];  // already-processed pipeline output
+    const API = {
+      login: '/api/v1/auth/login',
+      logout: '/api/v1/auth/logout',
+      me: '/api/v1/auth/me',
+      jobs: '/api/jobs',
+      stats: '/api/stats',
+      gate: (id, stage, value) => `/api/jobs/${id}/gate`,
+      approve: id => `/api/jobs/${id}/approve`,
+      skip: id => `/api/jobs/${id}/skip`,
+    };
 
-    function refresh() {
-      const a = document.getElementById('cnt-approved');
-      const s = document.getElementById('cnt-skipped');
-      if (a) a.textContent = counters.approved;
-      if (s) s.textContent = counters.skipped;
-    }
+    // ============== AUTH HELPERS ==============
+    // Primary path is the session cookie set by /api/v1/auth/login (login.html
+    // redirects back to /app/ on success). We only hit the API anonymously on
+    // a cold load with no cookie — then we bounce to the real login page
+    // instead of the old prompt() box, which never worked in a browser.
+    const LOGIN_URL = '/static/login.html';
 
-    // ----- card expand / collapse (in place) -----
-    const grid = document.getElementById('jobs-grid');
-
-    function closeAllDetails(exceptCard) {
-      document.querySelectorAll('.job-card.is-active').forEach((c) => {
-        if (c !== exceptCard) {
-          c.classList.remove('is-active');
-          c.setAttribute('aria-expanded', 'false');
-        }
-      });
-    }
-
-    function openDetail(card) {
-      closeAllDetails(card);
-      card.classList.add('is-active');
-      card.setAttribute('aria-expanded', 'true');
-      // smooth scroll to put the expanded card into view
-      requestAnimationFrame(() => {
-        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    }
-
-    function toggleDetail(card) {
-      if (card.classList.contains('is-active')) {
-        card.classList.remove('is-active');
-        card.setAttribute('aria-expanded', 'false');
-      } else {
-        openDetail(card);
+    async function fetchJSON(path, opts = {}) {
+      const r = await fetch(path, { credentials: 'include', ...opts });
+      if (r.status === 401) {
+        // Stash where we were so login.html can send the Captain back.
+        sessionStorage.setItem('captain_return_to', location.pathname + location.search);
+        location.replace(LOGIN_URL);
+        throw new Error('not signed in — redirecting to ' + LOGIN_URL);
       }
+      if (!r.ok) {
+        let detail = 'HTTP ' + r.status;
+        try { detail = (await r.json()).detail || detail; } catch (e) { /* non-JSON body */ }
+        throw new Error(detail);
+      }
+      return r.json();
     }
 
-    // ----- decision: approve / skip -----
-    function fmtTime(d) {
+    async function postJSON(path, body) {
+      return fetchJSON(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    }
+
+    // ============== STATE ==============
+    let jobsCache = [];
+    const byId = new Map();
+
+    // ============== HELPERS ==============
+    function fmtScore(score) {
+      // Raw score is 0-2500. Display as 0-100 for the circle.
+      return Math.round((score / 2500) * 100);
+    }
+    function escapeHTML(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function fmtClock(d) {
       const hh = String(d.getHours()).padStart(2, '0');
       const mm = String(d.getMinutes()).padStart(2, '0');
-      return `${hh}:${mm}`;
+      const ss = String(d.getSeconds()).padStart(2, '0');
+      return `${hh}:${mm}:${ss}`;
     }
 
-    function flashApproved(bar, label) {
-      const btn = bar.querySelector('[data-act="approve"]');
+    // ============== RENDER ==============
+    const grid = document.getElementById('jobs-grid');
+    const tpl = document.getElementById('tpl-job-card');
+
+    function renderCard(job) {
+      const node = tpl.content.cloneNode(true);
+      const article = node.querySelector('article');
+      article.setAttribute('data-job-id', String(job.id));
+      article.querySelector('.card__id-num').textContent = '#' + job.id;
+      article.querySelector('.card__company').textContent = escapeHTML(job.company || 'Unknown');
+      article.querySelector('.card__title').textContent = escapeHTML(job.title || '');
+      article.querySelector('.card__location').textContent = escapeHTML(job.location || 'Remote');
+      article.querySelector('.card__arrangement').textContent = job.score >= 1500 ? 'top fit' : 'standard';
+      // Score circle shows the RAW pipeline score (1940), not the 0-100 fit pct.
+      const scoreNum = article.querySelector('.score__num');
+      scoreNum.textContent = job.score;
+      scoreNum.setAttribute('aria-label', 'Match score ' + job.score + ' of ' + SCORE_MAX + ' (' + fmtScore(job.score) + ' percent fit)');
+      const sc = fmtScore(job.score);
+      const ring = article.querySelector('.score__fg');
+      const circumference = 2 * Math.PI * 17;
+      const offset = circumference * (1 - Math.min(1, sc / 100));
+      ring.setAttribute('stroke-dasharray', circumference.toFixed(2));
+      ring.setAttribute('stroke-dashoffset', offset.toFixed(2));
+      // Salary chip
+      article.querySelector('.chip--salary').textContent = escapeHTML(job.salary || 'Salary n/d');
+      const sourceMap = { xing: 'XING', stepstone: 'StepStone', linkedin: 'LinkedIn', arbeitsagentur: 'Arbeitsagentur', indeed: 'Indeed' };
+      const srcLabel = sourceMap[(job.source || '').toLowerCase()] || (job.source || 'unknown');
+      const chip = article.querySelector('.chip--source');
+      chip.textContent = srcLabel;
+      chip.setAttribute('data-source', (job.source || '').toLowerCase());
+
+      // Apply existing gate state
+      const state = {
+          cv_ok: !!job.cv_ok,
+          anschreiben_ok: !!job.anschreiben_ok,
+          motivation_ok: !!job.motivation_ok,
+          approved_at: job.approved_at || '',
+          status: job.status || 'new',
+        };
+      applyCardState(article, state);
+      return article;
+    }
+
+    function applyCardState(article, state) {
+      // status
+      if (state.status === 'approved') article.setAttribute('data-state', 'approved');
+      else if (state.status === 'skipped') article.setAttribute('data-state', 'skipped');
+      else article.setAttribute('data-state', 'review');
+
+      // gates
+      const gates = article.querySelectorAll('.gate');
+      const cvOk = state.cv_ok;
+      const ansOk = state.anschreiben_ok;
+      const motOk = state.motivation_ok;
+      gates.forEach(g => {
+        const stage = g.getAttribute('data-stage');
+        const button = g.querySelector('.gate__act');
+        const note = g.querySelector('.gate__note');
+        const mark = g.querySelector('.gate__mark');
+        const label = g.querySelector('.gate__label');
+        let isOn = false;
+        let gateState = 'locked';
+        let noteText = '';
+        if (stage === 'cv') {
+          isOn = cvOk;
+          gateState = 'active';
+          noteText = isOn ? 'Approved · unlocks gate 02' : 'Ready to review · unlocks gate 02';
+        } else if (stage === 'anschreiben') {
+          if (cvOk) { gateState = 'active'; noteText = isOn ? 'Approved · unlocks gate 03' : 'Ready to review · unlocks gate 03'; }
+          else { gateState = 'locked'; noteText = 'Locked · waiting on gate 01'; }
+          isOn = ansOk;
+        } else if (stage === 'motivation') {
+          if (ansOk) { gateState = 'active'; noteText = isOn ? 'Approved · all gates cleared' : 'Ready to review · all gates next'; }
+          else { gateState = 'locked'; noteText = 'Locked · waiting on gate 02'; }
+          isOn = motOk;
+        }
+        g.setAttribute('data-state', isOn ? 'done' : gateState);
+        mark.textContent = isOn ? '✓' : '○';
+        note.textContent = noteText;
+        button.textContent = isOn ? 'uncheck' : '✓ Mark ok';
+        button.setAttribute('data-gate-act', isOn ? 'uncheck' : 'mark');
+        button.disabled = (gateState === 'locked');
+      });
+
+      // approve row
+      const allOk = cvOk && ansOk && motOk;
+      const approveRow = article.querySelector('.approve');
+      const approveBtn = approveRow.querySelector('.approve__btn');
+      const counter = approveRow.querySelector('.approve__counter');
+      const done = [cvOk, ansOk, motOk].filter(Boolean).length;
+      counter.textContent = done + ' of 3 gates approved.';
+      if (allOk && state.status !== 'approved') {
+        approveRow.setAttribute('data-state', 'enabled');
+        approveBtn.disabled = false;
+      } else if (state.status === 'approved') {
+        approveRow.setAttribute('data-state', 'submitted');
+        approveBtn.disabled = true;
+        approveBtn.querySelector('.approve__btn-label').textContent = 'Approved · awaiting submit';
+      } else {
+        approveRow.setAttribute('data-state', 'disabled');
+        approveBtn.disabled = true;
+      }
+    }
+
+    function renderAll(jobs) {
+      grid.innerHTML = '';
+      jobsCache = jobs;
+      byId.clear();
+      if (jobs.length === 0) {
+        document.getElementById('empty-state').hidden = false;
+        document.getElementById('loading-state').hidden = true;
+        return;
+      }
+      document.getElementById('empty-state').hidden = true;
+      document.getElementById('loading-state').hidden = true;
+      jobs.forEach(j => {
+        const node = renderCard(j);
+        grid.appendChild(node);
+        byId.set(j.id, j);
+      });
+      refreshStats();
+    }
+
+    async function loadJobs() {
+      document.getElementById('loading-state').hidden = false;
+      try {
+        const [jobs, stats] = await Promise.all([
+          fetchJSON(API.jobs + '?limit=50'),
+          fetchJSON(API.stats).catch(() => null),
+        ]);
+        renderAll(dashboardJobs(jobs));
+        if (stats) updateSidebarCounters(stats);
+      } catch (e) {
+        console.error('loadJobs failed:', e);
+        document.getElementById('loading-state').innerHTML =
+          '<div class="empty-state"><div class="empty-state__icon">!</div><h2 class="empty-state__title">Couldn\'t reach the API.</h2><p class="empty-state__sub">' + escapeHTML(e.message) + '</p></div>';
+      }
+    }
+
+    // The dashboard is a decision surface, not the whole backlog: show the top
+    // 6 by score and drop pipeline output that's already been processed.
+    function dashboardJobs(jobs) {
+      return jobs
+        .filter(j => !HIDDEN_STATUSES.includes((j.status || '').toLowerCase()))
+        .sort((a, b) => (b.score || 0) - (a.score || 0))
+        .slice(0, DASHBOARD_LIMIT);
+    }
+
+    function refreshStats() {
+      const awaiting = jobsCache.filter(j => j.status === 'new').length;
+      const ready = jobsCache.filter(j => j.cv_ok && j.anschreiben_ok && j.motivation_ok && j.status !== 'approved').length;
+      const submitted = jobsCache.filter(j => j.status === 'approved').length;
+      const skipped = jobsCache.filter(j => j.status === 'skipped').length;
+      document.getElementById('stat-awaiting').textContent = awaiting;
+      document.getElementById('stat-ready').textContent = ready;
+      document.getElementById('stat-submitted').textContent = submitted;
+      document.getElementById('stat-skipped').textContent = skipped;
+      document.getElementById('nav-new-count').textContent = awaiting;
+      document.getElementById('nav-approved-count').textContent = submitted;
+      document.getElementById('nav-skipped-count').textContent = skipped;
+    }
+
+    function updateSidebarCounters(stats) {
+      if (!stats || !stats.by_status) return;
+      const map = stats.by_status;
+      document.getElementById('nav-approved-count').textContent = map.approved || 0;
+      document.getElementById('nav-skipped-count').textContent = map.skipped || 0;
+      document.getElementById('nav-new-count').textContent = map.new || 0;
+    }
+
+    // ============== CLICK HANDLERS ==============
+    grid.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-gate-act],[data-act]');
       if (!btn) return;
-      const original = btn.innerHTML;
-      btn.classList.add('is-confirmed');
-      btn.innerHTML = `<span aria-hidden="true">✓</span> Approved ${label}`;
-      setTimeout(() => {
-        btn.classList.remove('is-confirmed');
-        btn.innerHTML = original;
-      }, 2000);
-    }
+      const card = btn.closest('.card');
+      if (!card) return;
+      const jobId = card.getAttribute('data-job-id');
+      e.stopPropagation();
+      e.preventDefault();
 
-    function decide(card, kind) {
-      if (!card || card.classList.contains('is-approved') || card.classList.contains('is-skipped')) return;
-
-      const now = fmtTime(new Date());
-
-      if (kind === 'approve') {
-        card.classList.add('is-approved');
-        card.classList.remove('is-skipped');
-        counters.approved += 1;
-        // flash the bar button
-        const bar = card.querySelector('.job-detail__bar');
-        if (bar) flashApproved(bar, now);
-        // after 2s, collapse the card and move it to bottom of grid
-        setTimeout(() => {
-          card.classList.remove('is-active');
-          card.setAttribute('aria-expanded', 'false');
-          // move to end of grid (DOM reorder)
-          if (grid && card.parentNode === grid) {
-            grid.appendChild(card);
+      // Gate toggle — OPTIMISTIC: flip the card immediately, then reconcile
+      // with whatever the server returns (it may have re-locked downstream gates).
+      if (btn.hasAttribute('data-gate-act')) {
+        const gate = btn.closest('.gate');
+        const stage = gate.getAttribute('data-stage');
+        const newVal = gate.getAttribute('data-state') !== 'done';
+        const job = byId.get(Number(jobId));
+        const before = job ? {
+          cv_ok: !!job.cv_ok, anschreiben_ok: !!job.anschreiben_ok, motivation_ok: !!job.motivation_ok,
+        } : { cv_ok: false, anschreiben_ok: false, motivation_ok: false };
+        // Predict server-side rollback semantics so the UI feels instant.
+        const optimistic = Object.assign({}, before);
+        if (stage === 'cv') {
+          optimistic.cv_ok = newVal;
+          if (!newVal) { optimistic.anschreiben_ok = false; optimistic.motivation_ok = false; }
+        } else if (stage === 'anschreiben') {
+          optimistic.anschreiben_ok = newVal;
+          if (!newVal) optimistic.motivation_ok = false;
+        } else {
+          optimistic.motivation_ok = newVal;
+        }
+        applyCardState(card, {
+          cv_ok: optimistic.cv_ok, anschreiben_ok: optimistic.anschreiben_ok,
+          motivation_ok: optimistic.motivation_ok, status: job ? job.status : 'new',
+        });
+        try {
+          const result = await postJSON(API.gate(jobId, stage), { stage, value: newVal });
+          if (job) {
+            job.cv_ok = result.cv_ok;
+            job.anschreiben_ok = result.anschreiben_ok;
+            job.motivation_ok = result.motivation_ok;
           }
-        }, 2000);
-      } else if (kind === 'skip') {
-        card.classList.add('is-skipped');
-        card.classList.remove('is-approved');
-        counters.skipped += 1;
-        // collapse if open
-        card.classList.remove('is-active');
-        card.setAttribute('aria-expanded', 'false');
+          applyCardState(card, {
+            cv_ok: result.cv_ok, anschreiben_ok: result.anschreiben_ok,
+            motivation_ok: result.motivation_ok, status: job ? job.status : 'new',
+          });
+          refreshStats();
+          flashLog(`gate ${stage} ${newVal ? 'approved' : 'rolled back'} — job #${jobId}`);
+        } catch (e) {
+          // Roll the card back to its pre-click state — never leave a lie on screen.
+          if (job) {
+            job.cv_ok = before.cv_ok;
+            job.anschreiben_ok = before.anschreiben_ok;
+            job.motivation_ok = before.motivation_ok;
+          }
+          applyCardState(card, {
+            cv_ok: before.cv_ok, anschreiben_ok: before.anschreiben_ok,
+            motivation_ok: before.motivation_ok, status: job ? job.status : 'new',
+          });
+          refreshStats();
+          flashLog('gate update failed: ' + e.message);
+        }
+        return;
       }
-      refresh();
+
+      // Final Approve & Submit
+      if (btn.getAttribute('data-act') === 'approve') {
+        const job = byId.get(Number(jobId));
+        if (!job || !(job.cv_ok && job.anschreiben_ok && job.motivation_ok)) return;
+        if (!confirm(`Approve job #${jobId} — ${job.company} · ${job.title}?\n\nNothing is sent from here. This marks it approved and queues it; the actual submit stays your hands.`)) return;
+        btn.disabled = true;
+        btn.querySelector('.approve__btn-label').textContent = 'Approving…';
+        try {
+          const result = await postJSON(API.approve(jobId));
+          if (job) job.status = result.status;
+          applyCardState(card, {
+            cv_ok: !!job.cv_ok, anschreiben_ok: !!job.anschreiben_ok,
+            motivation_ok: !!job.motivation_ok, status: result.status,
+          });
+          refreshStats();
+          flashLog(`job #${jobId} marked ${result.status}`);
+          animateToBottom(card);
+        } catch (e) {
+          btn.disabled = false;
+          btn.querySelector('.approve__btn-label').textContent = 'Approve & Submit';
+          flashLog('approve failed: ' + e.message);
+        }
+        return;
+      }
+
+      // Skip
+      if (btn.getAttribute('data-act') === 'skip') {
+        if (!confirm(`Skip job #${jobId}?`)) return;
+        btn.disabled = true;
+        try {
+          const result = await postJSON(API.skip(jobId));
+          const job = byId.get(Number(jobId));
+          if (job) job.status = result.status;
+          applyCardState(card, {
+            cv_ok: !!job.cv_ok, anschreiben_ok: !!job.anschreiben_ok,
+            motivation_ok: !!job.motivation_ok, status: result.status,
+          });
+          refreshStats();
+          flashLog(`job #${jobId} skipped`);
+          animateToBottom(card);
+        } catch (e) {
+          btn.disabled = false;
+          flashLog('skip failed: ' + e.message);
+        }
+        return;
+      }
+    });
+
+    // Approved/skipped cards drift to the end of the grid instead of vanishing —
+    // the Captain keeps the full picture of what he already decided.
+    function animateToBottom(card) {
+      card.classList.add('is-moving');
+      setTimeout(() => {
+        grid.appendChild(card);
+        card.classList.remove('is-moving');
+        flashLog('card moved to the bottom of the list.');
+      }, 420);
     }
 
-    // ----- click delegation -----
-    document.addEventListener('click', (e) => {
-      const target = e.target.closest('[data-act]');
-      if (target) {
-        const card = target.closest('.job-card');
-        const act = target.getAttribute('data-act');
-        const targetId = target.getAttribute('data-target');
-        const targetCard = targetId ? document.querySelector(`.job-card[data-job-id="${targetId}"]`) : card;
-
-        if (act === 'approve' || act === 'skip') {
-          decide(targetCard, act);
-          e.stopPropagation();
-          return;
-        }
-        if (act === 'open-xing') {
-          const url = targetCard && targetCard.getAttribute('data-url');
-          if (url) window.open(url, '_blank', 'noopener');
-          e.stopPropagation();
-          return;
-        }
-        if (act === 'open') {
-          if (targetCard) openDetail(targetCard);
-          e.stopPropagation();
-          return;
-        }
-      }
-      // card body click (not on a button) → toggle detail
-      const card = e.target.closest('.job-card');
-      if (card && !e.target.closest('button') && !e.target.closest('a')) {
-        // ghost jobs without detail still toggle (no-op since no .job-detail inside)
-        if (card.querySelector('.job-detail')) {
-          toggleDetail(card);
-        }
-      }
-    });
-
-    // ----- keyboard -----
-    document.addEventListener('keydown', (e) => {
-      if (/^(input|textarea|select)$/i.test(e.target.tagName)) return;
-      const active = document.activeElement;
-      const card = active && active.closest ? active.closest('.job-card') : null;
-      const isOpen = card && card.classList.contains('is-active');
-
-      if ((e.key === 'Enter' || e.key === ' ') && card) {
-        e.preventDefault();
-        toggleDetail(card);
-      } else if ((e.key === 'a' || e.key === 'A') && card && isOpen) {
-        decide(card, 'approve');
-      } else if ((e.key === 's' || e.key === 'S') && card && isOpen) {
-        decide(card, 'skip');
-      } else if (e.key === 'Escape') {
-        closeAllDetails(null);
-      }
-    });
-
-    // ----- Captain's Log ticker (30s interval) -----
+    // ============== LOG TICKER ==============
     const logMsg = document.getElementById('log-msg');
     const logTime = document.getElementById('log-time');
-    const heroClock = document.getElementById('hero-clock');
-
-    const tickerStates = [
-      { msg: 'Pipeline status: <b>idle</b> · waiting on Captain\'s decision · next auto-fit sweep in <b>14 min</b>', wait: '14 min' },
-      { msg: 'Auto-fit sweep in <b>13 min</b> · <b>3 fits</b> queued for Captain · last submit <b>2d ago</b>', wait: '13 min' },
-      { msg: 'Scraper <b>XING</b> live · <b>28 jobs</b> in 24h · <b>7</b> auto-fit · Captain to review <b>3 fits</b>', wait: '12 min' },
-      { msg: 'CUA bot <b>idle</b> · last form-fill on StepStone, <b>3h 14m</b> ago · success rate <b>94%</b>', wait: '11 min' },
-      { msg: 'No new applications in <b>2d</b> · Captain velocity below target · consider raising <b>auto-fit threshold</b> from 75 → 70', wait: '10 min' },
-      { msg: 'Calendar: <b>deep work</b> block starts <b>10:00</b> · 90 min · disable non-urgent Captain\'s Log noise', wait: '9 min' },
-    ];
-
-    let tickerIdx = 0;
-    function tick() {
-      const now = new Date();
-      const hh = String(now.getHours()).padStart(2, '0');
-      const mm = String(now.getMinutes()).padStart(2, '0');
-      const ss = String(now.getSeconds()).padStart(2, '0');
-      if (logTime) logTime.textContent = `⏱ ${hh}:${mm}:${ss}`;
-      if (heroClock) heroClock.textContent = `${hh}:${mm}`;
+    function flashLog(msg) {
+      logMsg.innerHTML = msg;
+      logMsg.style.transition = 'opacity 0.25s';
+      logMsg.style.opacity = '0';
+      setTimeout(() => { logMsg.style.opacity = '1'; }, 100);
     }
-    function rotateMsg() {
-      tickerIdx = (tickerIdx + 1) % tickerStates.length;
-      if (logMsg) {
-        logMsg.style.opacity = '0';
-        setTimeout(() => {
-          logMsg.innerHTML = tickerStates[tickerIdx].msg;
-          logMsg.style.opacity = '1';
-        }, 250);
-      }
-    }
-    tick();
-    setInterval(tick, 1000);
-    setInterval(rotateMsg, 30000);
+    setInterval(() => {
+      logTime.textContent = '⏱ ' + fmtClock(new Date());
+    }, 1000);
 
+    // ============== REFRESH BUTTON ==============
+    document.getElementById('btn-refresh').addEventListener('click', () => {
+      flashLog('Reloading jobs from server…');
+      loadJobs();
+    });
+
+    // ============== SEARCH FILTER ==============
+    document.getElementById('search').addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      grid.querySelectorAll('.card').forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = (!q || text.includes(q)) ? '' : 'none';
+      });
+    });
+
+    // ============== SIGN OUT ==============
+    document.getElementById('link-logout').addEventListener('click', async (e) => {
+      e.preventDefault();
+      try { await postJSON(API.logout); } catch (e) {}
+      location.reload();
+    });
+
+    // ============== BOOT ==============
+    loadJobs();
   })();
   </script>
-  </div><!-- /app -->
 </body>
 </html>

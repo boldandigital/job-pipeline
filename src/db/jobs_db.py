@@ -104,6 +104,10 @@ def get_user_profile(user_id: str = ADMIN_USER_ID) -> dict[str, Any]:
 
 # Schema applied to new users' jobs DB on first connect.
 # Mirrors the admin user's data/jobs.db schema so the dashboard works out of the box.
+#
+# Phase 1.7 — 4-gate progressive approval columns:
+#   cv_ok, Anschreiben_ok, motivation_ok — booleans, default 0 (false)
+#   approved_at — ISO timestamp, set when the final Approve & Submit fires
 _USER_JOBS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,10 +122,24 @@ CREATE TABLE IF NOT EXISTS jobs (
     status TEXT DEFAULT 'new',
     cv_path TEXT,
     cover_letter_path TEXT,
+    cv_ok INTEGER DEFAULT 0,
+    anschreiben_ok INTEGER DEFAULT 0,
+    motivation_ok INTEGER DEFAULT 0,
+    approved_at TEXT,
     created_at TEXT,
     updated_at TEXT
 );
 """
+
+# Migration for existing DBs (admin's legacy data/jobs.db) that don't have
+# the gate columns yet. Each ALTER is wrapped in a guard so it's a no-op on
+# already-migrated DBs.
+_GATE_MIGRATIONS = [
+    "ALTER TABLE jobs ADD COLUMN cv_ok INTEGER DEFAULT 0",
+    "ALTER TABLE jobs ADD COLUMN anschreiben_ok INTEGER DEFAULT 0",
+    "ALTER TABLE jobs ADD COLUMN motivation_ok INTEGER DEFAULT 0",
+    "ALTER TABLE jobs ADD COLUMN approved_at TEXT",
+]
 
 
 def connect_user_db(user_id: str = ADMIN_USER_ID) -> sqlite3.Connection:
@@ -148,5 +166,28 @@ def connect_user_db(user_id: str = ADMIN_USER_ID) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     # Ensure schema exists for any user (cheap; CREATE TABLE IF NOT EXISTS is idempotent)
     conn.executescript(_USER_JOBS_SCHEMA)
+    # Run gated migrations on existing DBs that lack the new fields.
+    # Each ALTER would error on duplicate column, so we look at PRAGMA first.
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    if "cv_ok" not in existing_cols:
+        try:
+            conn.execute("ALTER TABLE jobs ADD COLUMN cv_ok INTEGER DEFAULT 0")
+        except Exception:
+            pass
+    if "anschreiben_ok" not in existing_cols:
+        try:
+            conn.execute("ALTER TABLE jobs ADD COLUMN anschreiben_ok INTEGER DEFAULT 0")
+        except Exception:
+            pass
+    if "motivation_ok" not in existing_cols:
+        try:
+            conn.execute("ALTER TABLE jobs ADD COLUMN motivation_ok INTEGER DEFAULT 0")
+        except Exception:
+            pass
+    if "approved_at" not in existing_cols:
+        try:
+            conn.execute("ALTER TABLE jobs ADD COLUMN approved_at TEXT")
+        except Exception:
+            pass
     conn.commit()
     return conn

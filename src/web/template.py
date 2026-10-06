@@ -223,6 +223,16 @@ BOOTSTRAP_JS = r"""
 
 
 def index_page() -> HTMLResponse:
+    """Serve the v3 4-gate dashboard as-is.
+
+    The v3 dashboard has its own self-contained JS (renders cards from
+    /api/jobs, wires gate buttons, etc.) and does NOT need the legacy
+    template.py bootstrap. We detect the v3 dashboard by `data-version="3-4gate"`
+    on the root element and skip the legacy append.
+    """
+    if 'data-version="3-4gate"' in INDEX_HTML:
+        return HTMLResponse(INDEX_HTML)
+    # Legacy v2 fallback
     rendered = BOOTSTRAP_JS.replace("__AUTH_TOKEN__", _AUTH_TOKEN)
     html = INDEX_HTML.replace("</body>", rendered + "\n</body>")
     return HTMLResponse(html)

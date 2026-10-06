@@ -252,6 +252,11 @@ def _row_to_job(row: sqlite3.Row, batches_dir: Path) -> Dict[str, Any]:
         "salary": _guess_salary_band(row["title"] or "", row["description"] or ""),
         "cv_path": cv_path,
         "cover_letter_path": cl_path,
+        # Phase 1.7 — 4-gate progressive approval
+        "cv_ok": bool(row["cv_ok"]) if "cv_ok" in row.keys() else False,
+        "anschreiben_ok": bool(row["anschreiben_ok"]) if "anschreiben_ok" in row.keys() else False,
+        "motivation_ok": bool(row["motivation_ok"]) if "motivation_ok" in row.keys() else False,
+        "approved_at": (row["approved_at"] or "") if "approved_at" in row.keys() else "",
         "created_at": row["created_at"] or "",
         "updated_at": row["updated_at"] or "",
     }
@@ -1010,6 +1015,73 @@ def skip_job(request: Request, job_id: int):
     _update_status(request, job_id, "skipped")
     _discord_notify("skipped", job)
     return {"ok": True, "id": job_id, "status": "skipped"}
+
+
+class GateRequest(BaseModel):
+    """Body of POST /api/v1/jobs/{id}/gate — toggle one of the 3 progress gates."""
+    stage: str  # "cv" | "anschreiben" | "motivation"
+    value: bool  # true = mark ok, false = uncheck
+
+
+@app.post("/api/jobs/{job_id}/gate")
+def toggle_gate(request: Request, job_id: int, body: GateRequest):
+    """Mark or unmark one of the 3 progress gates on a job.
+
+    Validates that the gate progression rule is honoured:
+      - cv → anschreiben: anschreiben_ok may only become true if cv_ok is true
+      - anschreiben → motivation: motivation_ok may only become true if anschreiben_ok is true
+    Rolling a gate back re-locks every gate after it (server enforces the same
+    rule the dashboard CSS does, so the UI is consistent with the data).
+    """
+    _require_auth(request)
+    if body.stage not in ("cv", "anschreiben", "motivation"):
+        raise HTTPException(status_code=400, detail="invalid stage (must be cv|anschreiben|motivation)")
+    conn = _connect(request)
+    try:
+        # Read current state
+        row = conn.execute("SELECT cv_ok, anschreiben_ok, motivation_ok FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"job {job_id} not found")
+        cv_ok = bool(row["cv_ok"])
+        ans_ok = bool(row["anschreiben_ok"])
+        mot_ok = bool(row["motivation_ok"])
+        # Enforce progression rule
+        if body.stage == "anschreiben" and body.value and not cv_ok:
+            raise HTTPException(status_code=409, detail="Gate 02 (Anschreiben) requires Gate 01 (CV) to be approved first")
+        if body.stage == "motivation" and body.value and not ans_ok:
+            raise HTTPException(status_code=409, detail="Gate 03 (Motivation) requires Gate 02 (Anschreiben) to be approved first")
+        # Rolling back a gate re-locks every gate after it
+        new_cv = cv_ok
+        new_ans = ans_ok
+        new_mot = mot_ok
+        if body.stage == "cv":
+            new_cv = body.value
+            if not body.value:
+                new_ans = False
+                new_mot = False
+        elif body.stage == "anschreiben":
+            new_ans = body.value
+            if not body.value:
+                new_mot = False
+        elif body.stage == "motivation":
+            new_mot = body.value
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE jobs SET cv_ok=?, anschreiben_ok=?, motivation_ok=?, updated_at=? WHERE id=?",
+            (int(new_cv), int(new_ans), int(new_mot), now, job_id),
+        )
+        conn.commit()
+        all_ok = new_cv and new_ans and new_mot
+        return {
+            "ok": True,
+            "id": job_id,
+            "cv_ok": new_cv,
+            "anschreiben_ok": new_ans,
+            "motivation_ok": new_mot,
+            "all_gates_ok": all_ok,
+        }
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
