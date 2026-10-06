@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XING Apply Assistant — CaptainApply</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Inter Tight', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            ink: '#0F172A',
+            accent: { 500: '#06B6D4', 600: '#0891B2' },
+            bone: '#FAFAFA',
+            slate: { 50: '#F8FAFC', 100: '#F1F5F9', 200: '#E2E8F0', 500: '#64748B', 900: '#0F172A' },
+            success: '#10B981',
+            warn: '#F59E0B',
+            danger: '#EF4444',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { font-feature-settings: 'cv11', 'ss01'; }
+    .panel-scroll { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
+    .panel-scroll::-webkit-scrollbar { width: 6px; }
+    .panel-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+    .kbd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
+    details[open] summary .chev { transform: rotate(90deg); }
+    summary { list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    .chev { transition: transform 0.15s ease; }
+    .copy-toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #0F172A; color: white;
+      padding: 10px 16px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      opacity: 0; transform: translateY(8px);
+      transition: opacity 0.18s, transform 0.18s;
+      pointer-events: none;
+      z-index: 100;
+    }
+    .copy-toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body class="bg-bone text-ink antialiased h-screen overflow-hidden">
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_420px] h-full">
+
+    <!-- LEFT: XING iframe + manual fallback -->
+    <section class="flex flex-col border-r border-slate-200 bg-slate-50 min-h-0">
+
+      <!-- Banner explaining the cross-origin reality -->
+      <div class="bg-amber-50 border-b border-amber-200 px-5 py-3 text-sm text-amber-900 flex items-start gap-3">
+        <span class="text-lg leading-none">⚠️</span>
+        <div class="flex-1">
+          <strong class="font-semibold">XING blocks cross-origin automation.</strong>
+          We can show you the page, but we cannot fill it for you from a script
+          — XING does not allow it for security reasons. Use the side panel on
+          the right to copy your values and paste them into the form.
+          <a href="MANUAL_FALLBACK" id="openInNewTab" target="_blank"
+             class="ml-2 underline font-medium hover:text-amber-700">
+            ↗ Open XING in a new tab (recommended)
+          </a>
+        </div>
+      </div>
+
+      <!-- Header strip with job title -->
+      <header class="bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between">
+        <div>
+          <div class="text-xs uppercase tracking-wider text-slate-500 font-medium">
+            XING Apply Assistant
+          </div>
+          <h1 class="text-lg font-semibold text-ink" id="jobTitle">Loading…</h1>
+          <div class="text-xs text-slate-500" id="jobSubtitle"></div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-500">Score</span>
+          <span class="px-2.5 py-1 rounded-full bg-success/10 text-success font-bold text-sm"
+                id="jobScore">—</span>
+        </div>
+      </header>
+
+      <!-- The XING iframe. XING may set X-Frame-Options that block embedding;
+           in that case the browser shows a blank area, which is why the
+           "open in new tab" link is the recommended path. -->
+      <div class="flex-1 min-h-0 bg-white">
+        <iframe id="xingFrame"
+                src="ABOUT_BLANK"
+                class="w-full h-full border-0"
+                referrerpolicy="no-referrer"
+                sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+                title="XING job application form">
+        </iframe>
+      </div>
+
+      <!-- Footer with manual-submit instructions -->
+      <footer class="bg-slate-50 border-t border-slate-200 px-5 py-3 text-xs text-slate-600 panel-scroll overflow-y-auto max-h-48">
+        <div class="font-semibold text-ink mb-1">Manual submit workflow (when the iframe is blank or you prefer)</div>
+        <ol class="list-decimal list-inside space-y-1" id="manualSteps">
+          <li>Loading steps…</li>
+        </ol>
+      </footer>
+
+    </section>
+
+    <!-- RIGHT: Control panel sidebar -->
+    <aside class="flex flex-col bg-white min-h-0">
+
+      <header class="border-b border-slate-200 px-5 py-4">
+        <div class="text-xs uppercase tracking-wider text-accent-600 font-semibold">
+          Ready to submit
+        </div>
+        <div class="text-sm text-slate-500 mt-0.5" id="sideSubtitle">
+          Copy these values, paste them into XING.
+        </div>
+      </header>
+
+      <div class="flex-1 overflow-y-auto panel-scroll px-5 py-4 space-y-5">
+
+        <!-- Field values -->
+        <section>
+          <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+            Field values
+          </h2>
+          <div class="space-y-2" id="fieldList">
+            <div class="text-slate-400 text-sm">Loading…</div>
+          </div>
+        </section>
+
+        <!-- Big yellow copy button -->
+        <button id="copyAll"
+                class="w-full bg-amber-400 hover:bg-amber-500 active:bg-amber-600
+                       text-ink font-bold text-base py-3 px-4 rounded-lg shadow-sm
+                       border-2 border-amber-500 transition-colors flex items-center justify-center gap-2">
+          <span>📋</span>
+          <span>Copy all to clipboard</span>
+        </button>
+
+        <!-- Attachments -->
+        <section>
+          <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+            Attachments (3)
+          </h2>
+          <div class="space-y-2" id="attachList">
+            <div class="text-slate-400 text-sm">Loading…</div>
+          </div>
+        </section>
+
+        <!-- XING message body (collapsible) -->
+        <section>
+          <details class="border border-slate-200 rounded-lg overflow-hidden">
+            <summary class="cursor-pointer bg-slate-50 hover:bg-slate-100 px-3 py-2 text-sm font-medium text-ink flex items-center gap-2">
+              <span class="chev inline-block">▶</span>
+              <span>XING message (Nachricht) — click to expand</span>
+            </summary>
+            <div class="px-3 py-3 text-sm text-slate-700 whitespace-pre-wrap font-mono leading-relaxed max-h-64 overflow-y-auto"
+                 id="messageBody">
+              Loading…
+            </div>
+          </details>
+        </section>
+
+        <!-- Cross-origin limitation explainer -->
+        <section class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 leading-relaxed">
+          <strong class="text-ink">Why no auto-fill?</strong>
+          Browser security blocks <span class="kbd">postMessage</span> from
+          this page into the XING iframe because xing.com is a different
+          origin. The "Copy" button is the honest workaround.
+        </section>
+
+      </div>
+
+      <!-- Sticky footer: Ready / Mark as sent -->
+      <footer class="border-t border-slate-200 px-5 py-4 space-y-2 bg-white">
+        <button id="markReady"
+                class="w-full bg-accent-500 hover:bg-accent-600 text-white font-semibold
+                       py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+          <span>✅</span>
+          <span>Mark ready to submit (status: queued)</span>
+        </button>
+        <div class="text-center text-xs text-slate-500">
+          Then click <span class="kbd">Submit</span> in the XING tab.
+        </div>
+      </footer>
+
+    </aside>
+  </div>
+
+  <!-- Copy toast -->
+  <div class="copy-toast" id="toast">Copied!</div>
+
+  <!-- Inlined payload (server-rendered for fast first paint + offline-safe) -->
+  <script id="xingPayload" type="application/json">__XING_PAYLOAD__</script>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // -------- Read the inlined payload --------
+      var payloadNode = document.getElementById('xingPayload');
+      var payload = {};
+      try {
+        payload = JSON.parse(payloadNode.textContent || '{}');
+      } catch (e) {
+        console.error('Could not parse XING payload:', e);
+        payload = { job: {}, fields: {}, attachments: [], message: {} };
+      }
+
+      var job = payload.job || {};
+      var fields = payload.fields || {};
+      var attachments = payload.attachments || [];
+      var message = payload.message || {};
+      var steps = payload.manual_steps || [];
+
+      // -------- Header --------
+      document.getElementById('jobTitle').textContent =
+        (job.title || 'XING Job') + (job.company ? ' — ' + job.company : '');
+      document.getElementById('jobSubtitle').textContent =
+        job.location ? job.location : '';
+      document.getElementById('jobScore').textContent = job.score || '—';
+
+      // -------- Iframe + "open in new tab" link --------
+      var frame = document.getElementById('xingFrame');
+      if (job.url) {
+        frame.src = job.url;
+        document.getElementById('openInNewTab').href = job.url;
+        document.getElementById('openInNewTab').textContent =
+          '↗ Open ' + (job.company || 'XING') + ' in a new tab (recommended)';
+      } else {
+        frame.style.display = 'none';
+      }
+
+      // -------- Field list --------
+      var fieldLabels = {
+        name:        { label: 'Name',                       icon: '👤' },
+        email:       { label: 'Email',                      icon: '✉️' },
+        phone:       { label: 'Phone',                      icon: '📞' },
+        location:    { label: 'Location',                   icon: '📍' },
+        salary:      { label: 'Salary expectation',         icon: '💶' },
+        start_date:  { label: 'Earliest start date',        icon: '📅' },
+      };
+      var fieldList = document.getElementById('fieldList');
+      fieldList.innerHTML = '';
+      Object.keys(fieldLabels).forEach(function (key) {
+        var meta = fieldLabels[key];
+        var value = fields[key] || '';
+        if (!value) return;
+        var row = document.createElement('div');
+        row.className = 'border border-slate-200 rounded-md px-3 py-2 bg-slate-50';
+        row.innerHTML =
+          '<div class="text-xs text-slate-500 font-medium mb-0.5">' + meta.icon + ' ' + meta.label + '</div>' +
+          '<div class="text-sm text-ink font-mono break-words" data-field="' + key + '">' +
+            escapeHtml(value) +
+          '</div>';
+        fieldList.appendChild(row);
+      });
+      if (fieldList.children.length === 0) {
+        fieldList.innerHTML = '<div class="text-slate-400 text-sm">No fields to fill.</div>';
+      }
+
+      // -------- Attachments list --------
+      var attachList = document.getElementById('attachList');
+      attachList.innerHTML = '';
+      var kindLabels = { cv: 'CV (Lebenslauf)', cover_letter: 'Cover letter (Anschreiben)', message: 'XING message draft' };
+      attachments.forEach(function (a) {
+        var label = kindLabels[a.kind] || a.kind;
+        var row = document.createElement('div');
+        row.className = 'border border-slate-200 rounded-md px-3 py-2 bg-white flex items-start justify-between gap-2';
+        row.innerHTML =
+          '<div class="min-w-0 flex-1">' +
+            '<div class="text-xs text-slate-500 font-medium">' + escapeHtml(label) + '</div>' +
+            '<div class="text-sm text-ink font-mono truncate" title="' + escapeHtml(a.filename) + '">' +
+              escapeHtml(a.filename) +
+            '</div>' +
+          '</div>' +
+          '<a href="' + escapeHtml(a.download_url) + '" target="_blank" rel="noopener" ' +
+             'class="text-xs text-accent-600 hover:text-accent-700 font-medium whitespace-nowrap">' +
+             '⤓ Download' +
+          '</a>';
+        attachList.appendChild(row);
+      });
+      if (attachList.children.length === 0) {
+        attachList.innerHTML = '<div class="text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-sm">⚠️ No attachments found in batches/ for this job.</div>';
+      }
+
+      // -------- XING message body --------
+      document.getElementById('messageBody').textContent = message.body || '(no message draft found)';
+
+      // -------- Manual steps --------
+      var stepsEl = document.getElementById('manualSteps');
+      stepsEl.innerHTML = '';
+      steps.forEach(function (s) {
+        var li = document.createElement('li');
+        li.textContent = s.replace(/^\d+\.\s*/, '');
+        stepsEl.appendChild(li);
+      });
+
+      // -------- Copy to clipboard --------
+      var toast = document.getElementById('toast');
+      var toastTimer = null;
+      function showToast(text) {
+        toast.textContent = text || 'Copied!';
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1800);
+      }
+
+      document.getElementById('copyAll').addEventListener('click', function () {
+        var lines = [];
+        Object.keys(fieldLabels).forEach(function (key) {
+          var meta = fieldLabels[key];
+          var v = fields[key] || '';
+          if (v) lines.push(meta.label + ': ' + v);
+        });
+        var text = lines.join('\n') + '\n\n--- XING Message (Nachricht) ---\n' + (message.body || '');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            showToast('Copied ' + lines.length + ' fields + message to clipboard');
+          }).catch(function (err) {
+            console.error('Clipboard write failed:', err);
+            showToast('Copy failed — see console');
+          });
+        } else {
+          // Fallback: textarea + execCommand
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); showToast('Copied (fallback)'); }
+          catch (e) { showToast('Copy failed'); }
+          document.body.removeChild(ta);
+        }
+      });
+
+      // -------- Mark ready (status: queued) --------
+      document.getElementById('markReady').addEventListener('click', function () {
+        var btn = document.getElementById('markReady');
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳</span><span>Marking…</span>';
+        fetch('/api/v1/xing/ready/' + encodeURIComponent(job.id), {
+          method: 'POST',
+          credentials: 'same-origin',
+        })
+          .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function (data) {
+            btn.innerHTML = '<span>✅</span><span>Marked as queued</span>';
+            btn.classList.remove('bg-accent-500', 'hover:bg-accent-600');
+            btn.classList.add('bg-success');
+            showToast('Status set to queued — now click Submit in the XING tab');
+          })
+          .catch(function (err) {
+            console.error('Ready request failed:', err);
+            btn.disabled = false;
+            btn.innerHTML = '<span>❌</span><span>Failed — retry</span>';
+            showToast('Failed: ' + err.message);
+          });
+      });
+
+      // -------- Helpers --------
+      function escapeHtml(s) {
+        if (s === undefined || s === null) return '';
+        return String(s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+    })();
+  </script>
+</body>
+</html>
