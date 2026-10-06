@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify your email — CaptainApply</title>
+  <meta name="description" content="Enter your 6-digit verification code.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Tailwind CDN: no SRI because we ship an inline tailwind.config below that
+       depends on this exact build. Matches the convention in marketing.html. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Inter Tight', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            ink: '#0F172A',
+            accent: { 500: '#06B6D4', 600: '#0891B2' },
+            bone: '#FAFAFA',
+            slate: { 50: '#F8FAFC', 100: '#F1F5F9', 200: '#E2E8F0', 500: '#64748B', 900: '#0F172A' },
+            success: '#10B981',
+          },
+        }
+      }
+    }
+  </script>
+  <style>body { font-feature-settings: "cv11", "ss01"; }</style>
+</head>
+<body class="bg-bone text-ink antialiased min-h-screen flex flex-col">
+
+  <header class="border-b border-slate-200 bg-bone/80 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center">
+      <a href="/" class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded bg-ink grid place-items-center text-accent-500 font-bold">⚓</div>
+        <span class="font-display font-semibold text-base tracking-tight">CaptainApply</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="flex-1 grid place-items-center px-6 py-12">
+    <div class="w-full max-w-md">
+      <h1 class="font-display font-bold text-3xl md:text-4xl tracking-tight">Check your inbox</h1>
+      <p class="mt-2 text-slate-500">We sent a 6-digit code to <span id="email-hint" class="text-ink font-medium">your email</span>. Enter it below.</p>
+
+      <form id="verify-form" class="mt-8 space-y-5" novalidate>
+        <div>
+          <label for="code" class="block text-sm font-medium mb-1.5">Verification code</label>
+          <input id="code" name="code" type="text" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"
+            class="w-full px-3.5 py-3 rounded-md border border-slate-200 bg-white text-center text-2xl tracking-[0.4em] font-display font-semibold focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+            placeholder="000000">
+        </div>
+
+        <div id="form-error" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2"></div>
+
+        <button id="submit-btn" type="submit"
+          class="w-full bg-ink text-white px-6 py-3 rounded-md font-medium hover:bg-slate-900 inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          <span>Verify and continue</span>
+          <svg id="spinner" class="hidden animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+          </svg>
+        </button>
+
+        <div class="text-center text-sm text-slate-500">
+          Didn't get a code?
+          <button type="button" id="resend-btn" class="text-accent-600 hover:text-ink font-medium">Resend</button>
+          <span id="resend-toast" class="hidden ml-2 text-success">Sent ✓</span>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <footer class="border-t border-slate-200 py-6">
+    <div class="max-w-6xl mx-auto px-6 flex items-center justify-between text-sm text-slate-500">
+      <span>© CaptainApply</span>
+      <a href="/login" class="hover:text-ink">Already have an account? Sign in →</a>
+    </div>
+  </footer>
+
+  <script>
+    const API_BASE = "";
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get("user_id") || "";
+    if (!userId) {
+      // No user_id → bounce back to signup
+      window.location.replace("/signup");
+    }
+
+    const form = document.getElementById("verify-form");
+    const errBox = document.getElementById("form-error");
+    const submitBtn = document.getElementById("submit-btn");
+    const spinner = document.getElementById("spinner");
+    const codeInput = document.getElementById("code");
+    const resendBtn = document.getElementById("resend-btn");
+    const resendToast = document.getElementById("resend-toast");
+
+    // Auto-focus the code field
+    codeInput.focus();
+
+    // Auto-submit when 6 digits entered
+    codeInput.addEventListener("input", () => {
+      codeInput.value = codeInput.value.replace(/\D/g, "").slice(0, 6);
+      if (codeInput.value.length === 6) form.requestSubmit();
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errBox.classList.add("hidden");
+      submitBtn.disabled = true;
+      spinner.classList.remove("hidden");
+
+      try {
+        const r = await fetch(API_BASE + "/api/v1/auth/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, code: codeInput.value }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.ok) {
+          const msg = data.error === "invalid_code"
+            ? "That code didn't match. Try again."
+            : data.error === "expired"
+            ? "That code expired. Click Resend."
+            : data.error === "too_many_attempts"
+            ? "Too many wrong attempts. Click Resend for a new code."
+            : "Something went wrong. Please try again.";
+          errBox.textContent = msg;
+          errBox.classList.remove("hidden");
+          return;
+        }
+        window.location.href = "/app/";
+      } catch (err) {
+        errBox.textContent = "Network error. Check your connection.";
+        errBox.classList.remove("hidden");
+      } finally {
+        submitBtn.disabled = false;
+        spinner.classList.add("hidden");
+      }
+    });
+
+    // Resend: re-call /api/v1/auth/signup with stored email if we have it.
+    // In dev the email/code is also logged to stdout, so this is enough.
+    resendBtn.addEventListener("click", async () => {
+      const email = sessionStorage.getItem("captain_signup_email");
+      if (!email) {
+        // No email cached (e.g. user opened this page in a new tab).
+        // Bounce to signup so they can re-enter it.
+        window.location.href = "/signup";
+        return;
+      }
+      resendBtn.disabled = true;
+      try {
+        await fetch(API_BASE + "/api/v1/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "resend", email, password: "resend-noop" }),
+        });
+        resendToast.classList.remove("hidden");
+        setTimeout(() => resendToast.classList.add("hidden"), 3000);
+      } catch (_) {
+        // silent
+      } finally {
+        resendBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# CaptainApply — production webapp dependencies
+#
+# This is the *runtime* deps file. Dev tooling (pytest, httpx, mypy,
+# ruff, etc.) is intentionally excluded to keep the Vercel function
+# bundle and the Docker image as small as possible.
+#
+# What lives here: only what src/web/app.py + src/web/auth.py + src/web/
+# template.py + the auth/DB layer actually need at import time.
+#
+# The full pipeline (scrapers, PDF rendering, Google Sheets) lives in
+# the project-root requirements.txt and is NOT deployed.
+
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+jinja2>=3.1.0
+pydantic>=2.0
+python-multipart>=0.0.9

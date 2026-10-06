@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign up — CaptainApply</title>
+  <meta name="description" content="Start your free CaptainApply trial. Auto-apply to DACH + EU jobs that fit your CV.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Inter Tight', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            ink: '#0F172A',
+            accent: { 500: '#06B6D4', 600: '#0891B2' },
+            bone: '#FAFAFA',
+            slate: { 50: '#F8FAFC', 100: '#F1F5F9', 200: '#E2E8F0', 500: '#64748B', 900: '#0F172A' },
+            success: '#10B981',
+          },
+        }
+      }
+    }
+  </script>
+  <style>body { font-feature-settings: "cv11", "ss01"; }</style>
+</head>
+<body class="bg-bone text-ink antialiased min-h-screen flex flex-col">
+
+  <header class="border-b border-slate-200 bg-bone/80 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center">
+      <a href="/" class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded bg-ink grid place-items-center text-accent-500 font-bold">⚓</div>
+        <span class="font-display font-semibold text-base tracking-tight">CaptainApply</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="flex-1 grid place-items-center px-6 py-12">
+    <div class="w-full max-w-md">
+      <h1 class="font-display font-bold text-3xl md:text-4xl tracking-tight">Start your free trial</h1>
+      <p class="mt-2 text-slate-500">7 days free. No card. Cancel anytime.</p>
+
+      <form id="signup-form" class="mt-8 space-y-5" novalidate>
+        <div>
+          <label for="name" class="block text-sm font-medium mb-1.5">Full name</label>
+          <input id="name" name="name" type="text" required autocomplete="name"
+            class="w-full px-3.5 py-2.5 rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent">
+        </div>
+        <div>
+          <label for="email" class="block text-sm font-medium mb-1.5">Work email</label>
+          <input id="email" name="email" type="email" required autocomplete="email"
+            class="w-full px-3.5 py-2.5 rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent">
+        </div>
+        <div>
+          <label for="password" class="block text-sm font-medium mb-1.5">Password</label>
+          <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password"
+            class="w-full px-3.5 py-2.5 rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent">
+          <p class="text-xs text-slate-500 mt-1.5">Min 8 characters.</p>
+        </div>
+
+        <div id="form-error" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2"></div>
+
+        <button id="submit-btn" type="submit"
+          class="w-full bg-ink text-white px-6 py-3 rounded-md font-medium hover:bg-slate-900 inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          <span>Create account</span>
+          <svg id="spinner" class="hidden animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+          </svg>
+        </button>
+
+        <p class="text-xs text-slate-500 text-center">
+          By signing up you agree to our terms. We never spam.
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <footer class="border-t border-slate-200 py-6">
+    <div class="max-w-6xl mx-auto px-6 flex items-center justify-between text-sm text-slate-500">
+      <span>© CaptainApply</span>
+      <a href="/login" class="hover:text-ink">Already have an account? Sign in →</a>
+    </div>
+  </footer>
+
+  <script>
+    const API_BASE = "";  // same origin; Vercel routes /api/* to the FastAPI function
+    const form = document.getElementById("signup-form");
+    const errBox = document.getElementById("form-error");
+    const submitBtn = document.getElementById("submit-btn");
+    const spinner = document.getElementById("spinner");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errBox.classList.add("hidden");
+      submitBtn.disabled = true;
+      spinner.classList.remove("hidden");
+
+      const fd = new FormData(form);
+      const payload = {
+        name: fd.get("name").trim(),
+        email: fd.get("email").trim(),
+        password: fd.get("password"),
+      };
+
+      try {
+        const r = await fetch(API_BASE + "/api/v1/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.ok) {
+          const msg = data.error === "email_taken"
+            ? "That email is already registered. Try signing in."
+            : data.error === "invalid_email"
+            ? "Please use a valid email address."
+            : data.error === "rate_limited"
+            ? "Too many attempts. Try again in a minute."
+            : "Something went wrong. Please try again.";
+          errBox.textContent = msg;
+          errBox.classList.remove("hidden");
+          return;
+        }
+        // Success — stash email so verify.html can resend, then redirect
+        try { sessionStorage.setItem("captain_signup_email", payload.email); } catch (_) {}
+        window.location.href = "/verify?user_id=" + encodeURIComponent(data.user_id);
+      } catch (err) {
+        errBox.textContent = "Network error. Check your connection.";
+        errBox.classList.remove("hidden");
+      } finally {
+        submitBtn.disabled = false;
+        spinner.classList.add("hidden");
+      }
+    });
+  </script>
+</body>
+</html>

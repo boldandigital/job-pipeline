@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in — CaptainApply</title>
+  <meta name="description" content="Sign in to your CaptainApply dashboard.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Tailwind CDN: see signup.html for the no-SRI rationale. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Inter Tight', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            ink: '#0F172A',
+            accent: { 500: '#06B6D4', 600: '#0891B2' },
+            bone: '#FAFAFA',
+            slate: { 50: '#F8FAFC', 100: '#F1F5F9', 200: '#E2E8F0', 500: '#64748B', 900: '#0F172A' },
+            success: '#10B981',
+          },
+        }
+      }
+    }
+  </script>
+  <style>body { font-feature-settings: "cv11", "ss01"; }</style>
+</head>
+<body class="bg-bone text-ink antialiased min-h-screen flex flex-col">
+
+  <header class="border-b border-slate-200 bg-bone/80 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center">
+      <a href="/" class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded bg-ink grid place-items-center text-accent-500 font-bold">⚓</div>
+        <span class="font-display font-semibold text-base tracking-tight">CaptainApply</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="flex-1 grid place-items-center px-6 py-12">
+    <div class="w-full max-w-md">
+      <h1 class="font-display font-bold text-3xl md:text-4xl tracking-tight">Welcome back</h1>
+      <p class="mt-2 text-slate-500">Sign in to your CaptainApply dashboard.</p>
+
+      <form id="login-form" class="mt-8 space-y-5" novalidate>
+        <div>
+          <label for="email" class="block text-sm font-medium mb-1.5">Email</label>
+          <input id="email" name="email" type="email" required autocomplete="email"
+            class="w-full px-3.5 py-2.5 rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent">
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="password" class="block text-sm font-medium">Password</label>
+            <button type="button" id="forgot-btn" class="text-xs text-accent-600 hover:text-ink font-medium">Forgot?</button>
+          </div>
+          <input id="password" name="password" type="password" required autocomplete="current-password"
+            class="w-full px-3.5 py-2.5 rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent">
+        </div>
+
+        <div id="form-error" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2"></div>
+        <div id="toast" class="hidden text-sm text-success bg-green-50 border border-green-200 rounded-md px-3 py-2"></div>
+
+        <button id="submit-btn" type="submit"
+          class="w-full bg-ink text-white px-6 py-3 rounded-md font-medium hover:bg-slate-900 inline-flex items-center justify-center gap-2 disabled:opacity-50">
+          <span>Sign in</span>
+          <svg id="spinner" class="hidden animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <footer class="border-t border-slate-200 py-6">
+    <div class="max-w-6xl mx-auto px-6 flex items-center justify-between text-sm text-slate-500">
+      <span>© CaptainApply</span>
+      <a href="/signup" class="hover:text-ink">Don't have an account? Sign up →</a>
+    </div>
+  </footer>
+
+  <script>
+    const API_BASE = "";
+    const form = document.getElementById("login-form");
+    const errBox = document.getElementById("form-error");
+    const toast = document.getElementById("toast");
+    const submitBtn = document.getElementById("submit-btn");
+    const spinner = document.getElementById("spinner");
+    const forgotBtn = document.getElementById("forgot-btn");
+    const emailInput = document.getElementById("email");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errBox.classList.add("hidden");
+      toast.classList.add("hidden");
+      submitBtn.disabled = true;
+      spinner.classList.remove("hidden");
+
+      const fd = new FormData(form);
+      const payload = {
+        email: fd.get("email").trim(),
+        password: fd.get("password"),
+      };
+
+      try {
+        // The FastAPI login endpoint accepts {user_id, password} for dev
+        // and {email, password} for production. We send both shapes to
+        // remain compatible with both.
+        const r = await fetch(API_BASE + "/api/v1/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: payload.email,
+            user_id: payload.email,
+            password: payload.password,
+          }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.ok) {
+          errBox.textContent = "Wrong email or password.";
+          errBox.classList.remove("hidden");
+          return;
+        }
+        window.location.href = "/app/";
+      } catch (err) {
+        errBox.textContent = "Network error. Check your connection.";
+        errBox.classList.remove("hidden");
+      } finally {
+        submitBtn.disabled = false;
+        spinner.classList.add("hidden");
+      }
+    });
+
+    // Forgot password: always 200 from the backend (no email enumeration).
+    forgotBtn.addEventListener("click", async () => {
+      const email = emailInput.value.trim();
+      if (!email) {
+        errBox.textContent = "Enter your email first, then click Forgot.";
+        errBox.classList.remove("hidden");
+        return;
+      }
+      errBox.classList.add("hidden");
+      try {
+        await fetch(API_BASE + "/api/v1/auth/forgot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        toast.textContent = "If that email is on file, we sent a reset link.";
+        toast.classList.remove("hidden");
+      } catch (_) {
+        toast.textContent = "If that email is on file, we sent a reset link.";
+        toast.classList.remove("hidden");
+      }
+    });
+  </script>
+</body>
+</html>

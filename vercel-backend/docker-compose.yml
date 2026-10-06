@@ -1,0 +1,48 @@
+# CaptainApply — Production webapp compose (Phase 1.6)
+#
+#   docker compose -f vercel-backend/docker-compose.yml --env-file .env up -d
+#   open http://localhost:8742
+#
+# Production overrides — set in `.env` (or export before invoking compose):
+#   CAPTAIN_SESSION_SECRET=...   # ≥44 chars, random. Without it cookies use
+#                                # the dev fallback (logs a warning).
+#   STRIPE_SECRET_KEY=sk_live_...
+#   STRIPE_WEBHOOK_SECRET=whsec_...
+#   STRIPE_PRICE_ID=price_...
+#   LARS_USER=admin
+#   LARS_PASS=...
+#   EXTRA_USERS=alice:alicepass,bob:bobpass
+
+services:
+  backend:
+    image: captainapply/api:latest
+    build:
+      context: ..
+      dockerfile: vercel-backend/Dockerfile
+    container_name: captainapply-api
+    restart: unless-stopped
+    ports:
+      - "8742:8742"
+    volumes:
+      - captainapply-data:/app/data
+    environment:
+      LARS_USER: ${LARS_USER:-lars}
+      LARS_PASS: ${LARS_PASS:-captain}
+      CAPTAIN_SESSION_SECRET: ${CAPTAIN_SESSION_SECRET:-}
+      EXTRA_USERS: ${EXTRA_USERS:-}
+      CAPTAIN_PROD: "1"
+      PYTHONUNBUFFERED: "1"
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8742/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  captainapply-data:
+    name: captainapply-data
