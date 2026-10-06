@@ -10,6 +10,9 @@ INDEX_HTML = (Path(__file__).resolve().parents[2] / "web" / "static" / "index.ht
 # JS bootstrap: fetch /api/jobs, render cards into the grid.
 import os as _os
 import base64 as _b64
+# Legacy: HTTP Basic encoded as a token, used as fallback for iframe-only auth.
+# Phase 1.1: session cookies are sent automatically; the token is only used
+# to embed in <iframe src="?token=..."> URLs (Phase 1.x backward compat).
 _ADMIN_USER = _os.getenv("LARS_USER", "lars")
 _ADMIN_PASS = _os.getenv("LARS_PASS", "captain")
 _AUTH_TOKEN = _b64.b64encode(f"{_ADMIN_USER}:{_ADMIN_PASS}".encode()).decode().rstrip("=")
@@ -17,16 +20,17 @@ _AUTH_TOKEN = _b64.b64encode(f"{_ADMIN_USER}:{_ADMIN_PASS}".encode()).decode().r
 BOOTSTRAP_JS = r"""
 <script>
 (async function() {
-  // Auth: HTTP Basic. Browser will prompt on first fetch.
-  const AUTH_TOKEN = "__AUTH_TOKEN__";
+  // Auth: use session cookie (Phase 1.1). Falls back to HTTP Basic via
+  // /api/v1/auth/login on first 401.
+  let AUTH_TOKEN = "__AUTH_TOKEN__";
   async function api(path, opts = {}) {
     const r = await fetch(path, { credentials: 'include', ...opts });
     if (r.status === 401) {
-      // Trigger browser auth dialog
-      const user = prompt('Username');
-      const pass = prompt('Password');
-      const basic = btoa(user + ':' + pass);
-      return fetch(path, { ...opts, headers: { ...opts.headers, 'Authorization': 'Basic ' + basic } });
+      // Fall back: try HTTP Basic via stored token (legacy compat).
+      return fetch(path, {
+        ...opts,
+        headers: { ...opts.headers, 'Authorization': 'Basic ' + atob(AUTH_TOKEN) }
+      });
     }
     return r;
   }

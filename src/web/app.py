@@ -4,14 +4,19 @@ FastAPI app for the Job Approval UI.
 Endpoints:
   GET  /                       — serve index.html (Captain's Bridge dashboard)
   GET  /static/{file}          — CSS / fonts
+
+  Auth (Phase 1.1 — session cookies):
+  POST /api/v1/auth/login      — {user_id, password} → set cookie
+  POST /api/v1/auth/logout     — clear cookie
+  GET  /api/v1/auth/me         — current user info
+
+  Jobs (per-user via session):
   GET  /api/jobs               — list all jobs (filterable by status)
   GET  /api/jobs/{id}          — single job with render paths
   POST /api/jobs/{id}/approve  — set status='approved', send Discord notify
   POST /api/jobs/{id}/skip     — set status='skipped'
   GET  /api/stats              — counts for the top bar / sidebar
   GET  /api/batches/{company}/files/{file}  — serve PDF previews
-
-Auth: simple HTTP Basic (single user = Lars). For localhost only.
 """
 from __future__ import annotations
 
@@ -29,6 +34,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .auth import (
+    check_bootstrap_admin,
+    clear_session_cookie,
+    current_user_id,
+    set_session_cookie,
+)
 from .template import index_page
 
 log = logging.getLogger("web.app")
@@ -62,53 +73,80 @@ app = FastAPI(title="Job Approval UI", version="1.0.0")
 
 @app.middleware("http")
 async def attach_user_state(request: Request, call_next):
-    """Resolve user_id from env (Phase 1) or session (Phase 4) on every request."""
-    from src.db.jobs_db import get_user_id
-    request.state.user_id = get_user_id(request=request)
+    """Resolve user_id from session cookie (production) or env var (CLI/cron).
+
+    Order of precedence:
+    1. Session cookie (signed via itsdangerous) — production users
+    2. LARS_USER_ID env var — CLI scripts + cron
+    3. Admin fallback — for safety (never fails the request)
+    """
+    from src.db.jobs_db import ADMIN_USER_ID, get_user_id
+    # 1. Session cookie
+    uid = current_user_id(request)
+    # 2. Env var (CLI/cron)
+    if not uid:
+        uid = get_user_id()
+    # 3. Admin fallback
+    if not uid:
+        uid = ADMIN_USER_ID
+    request.state.user_id = uid
     return await call_next(request)
 
 
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+# Auth helpers (Phase 1.1 — session cookies)
+# ---------------------------------------------------------------------------
 
 def _check_auth(request: Request) -> bool:
-    """Validate HTTP Basic auth header."""
+    """True if the request has a valid session cookie (or Basic legacy header)."""
+    # New: session cookie
+    if current_user_id(request):
+        return True
+    # Legacy: HTTP Basic (kept so Ye.r old curl scripts still work during migration)
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Basic "):
-        return False
-    try:
-        decoded = base64.b64decode(auth[6:]).decode()
-        user, _, pwd = decoded.partition(":")
-        return user == ADMIN_USER and pwd == ADMIN_PASS
-    except Exception:
-        return False
+    if auth.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(auth[6:]).decode()
+            user, _, pwd = decoded.partition(":")
+            if user == ADMIN_USER and pwd == ADMIN_PASS:
+                # Auto-create a session for the legacy Basic auth caller
+                # so the rest of the pipeline (which reads the cookie) works.
+                request.state.user_id = "lars"
+                return True
+        except Exception:
+            pass
+    return False
 
 
 def _require_auth(request: Request):
     if not _check_auth(request):
         raise HTTPException(
             status_code=401,
-            detail="Unauthorized",
+            detail="Unauthorized — please sign in",
             headers={"WWW-Authenticate": 'Basic realm="Captain\'s Bridge"'},
         )
 
 
 def _check_token(request: Request) -> bool:
-    """Alternative auth via ?token=base64(user:pass) for iframe use."""
+    """Alternative auth via ?token=base64(user:pass) — used by PDF iframes
+    that can't send cookies cross-origin. (Kept for backward compat with v2.)"""
     token = request.query_params.get("token", "")
     if not token:
         return False
     try:
         decoded = base64.b64decode(token).decode()
         user, _, pwd = decoded.partition(":")
-        return user == ADMIN_USER and pwd == ADMIN_PASS
+        if user == ADMIN_USER and pwd == ADMIN_PASS:
+            return True
     except Exception:
-        return False
+        pass
+    return False
 
 
 def _check_any_auth(request: Request) -> bool:
-    """Accept either HTTP Basic header OR ?token= query param."""
+    """Accept session cookie, HTTP Basic, OR ?token= query param (iframes)."""
     return _check_auth(request) or _check_token(request)
 
 
@@ -336,6 +374,73 @@ def _discord_notify(action: str, job: Dict[str, Any]) -> None:
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+
+# ---------------------------------------------------------------------------
+# Auth endpoints (Phase 1.1 — session cookies)
+# ---------------------------------------------------------------------------
+
+class LoginRequest(BaseModel):
+    user_id: str
+    password: str
+
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+    name: Optional[str] = None
+
+
+@app.post("/api/v1/auth/login")
+def auth_login(body: LoginRequest):
+    """Verify credentials, set the session cookie, return the user info.
+
+    Phase 1.1: only the bootstrap admin user (user_id='lars', env-var password).
+    Phase 1.2: real users table + bcrypt.
+    """
+    if not check_bootstrap_admin(body.user_id, body.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    response = JSONResponse(
+        {
+            "ok": True,
+            "user": {
+                "id": body.user_id,
+                "name": "Lars Zimmermann" if body.user_id == "lars" else body.user_id,
+                "plan": "admin" if body.user_id == "lars" else "free",
+            },
+        }
+    )
+    set_session_cookie(response, body.user_id)
+    return response
+
+
+@app.post("/api/v1/auth/logout")
+def auth_logout():
+    """Clear the session cookie."""
+    response = JSONResponse({"ok": True})
+    clear_session_cookie(response)
+    return response
+
+
+@app.get("/api/v1/auth/me")
+def auth_me(request: Request):
+    """Return info about the currently signed-in user (or 401)."""
+    uid = current_user_id(request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Not signed in")
+    # Phase 1.1: only the admin user exists
+    if uid == "lars":
+        return {
+            "id": "lars",
+            "name": "Lars Zimmermann",
+            "plan": "admin",
+            "email": "lars.z@icloud.com",
+        }
+    return {"id": uid, "name": uid, "plan": "free"}
+
+
+# ---------------------------------------------------------------------------
+# Root
+# ---------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
 def root():
