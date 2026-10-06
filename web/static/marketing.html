@@ -261,7 +261,7 @@
             <li>Manual apply only</li>
             <li>Discord digest</li>
           </ul>
-          <a href="/app/signup" class="block text-center text-sm font-medium border border-slate-200 px-4 py-2 rounded-md hover:bg-slate-50">Start free</a>
+          <a href="/app/signup" data-plan="free" class="block text-center text-sm font-medium border border-slate-200 px-4 py-2 rounded-md hover:bg-slate-50">Start free</a>
         </div>
         <!-- Solo -->
         <div class="rounded-xl border-2 border-ink p-5 relative">
@@ -276,7 +276,7 @@
             <li>Daily digest email</li>
             <li>Discord + Telegram</li>
           </ul>
-          <a href="/app/signup?plan=solo" class="block text-center text-sm font-medium bg-ink text-white px-4 py-2 rounded-md hover:bg-slate-900">Start 14-day trial</a>
+          <a href="/app/signup?plan=solo" data-plan="solo" data-checkout="solo" class="cta-checkout block text-center text-sm font-medium bg-ink text-white px-4 py-2 rounded-md hover:bg-slate-900">Start 14-day trial</a>
         </div>
         <!-- Pro -->
         <div class="rounded-xl border border-slate-200 p-5">
@@ -290,7 +290,7 @@
             <li>Daily digest email</li>
             <li>Priority support</li>
           </ul>
-          <a href="/app/signup?plan=pro" class="block text-center text-sm font-medium border border-slate-200 px-4 py-2 rounded-md hover:bg-slate-50">Start 14-day trial</a>
+          <a href="/app/signup?plan=pro" data-plan="pro" data-checkout="pro" class="cta-checkout block text-center text-sm font-medium border border-slate-200 px-4 py-2 rounded-md hover:bg-slate-50">Start 14-day trial</a>
         </div>
         <!-- Self-host -->
         <div class="rounded-xl border border-slate-200 p-5">
@@ -303,9 +303,27 @@
             <li>1 year of updates</li>
             <li>Pro features unlocked</li>
           </ul>
-          <a href="/app/selfhost" class="block text-center text-sm font-medium border border-slate-200 px-4 py-2 rounded-md hover:bg-slate-50">Buy + download</a>
+          <a href="#selfhost" class="block text-center text-sm font-medium border border-slate-200 px-4 py-2 rounded-md hover:bg-slate-50">Buy + download</a>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- Self-host details anchor (target of the pricing CTA above) -->
+  <section id="selfhost" class="py-16 border-t border-slate-200">
+    <div class="max-w-3xl mx-auto px-6">
+      <div class="text-xs font-medium text-accent-600 uppercase tracking-wider mb-2">Self-host</div>
+      <h2 class="font-display font-bold text-3xl tracking-tight mb-3">Run CaptainApply on your own VPS.</h2>
+      <p class="text-slate-500 mb-6 leading-relaxed">
+        The full source is AGPL-3.0. Pull the Docker image, point it at your data directory, and you're shipping in 5 minutes. €99 covers 1 year of updates and unlocks every Pro feature in your self-hosted instance.
+      </p>
+      <div class="rounded-lg border border-slate-200 bg-white p-5 font-mono text-xs text-slate-700 overflow-x-auto">
+        <div class="text-slate-400 mb-2"># one-liner</div>
+        <div>docker run -d -p 8742:8742 -v ~/.captainapply:/app/data boldandigital/captainapply:latest</div>
+      </div>
+      <p class="text-sm text-slate-500 mt-4">
+        Buy the license at <a class="text-accent-600 hover:underline" href="https://buy.stripe.com/captainapply-selfhost">checkout</a> — the Docker pull URL + license key arrive by email.
+      </p>
     </div>
   </section>
 
@@ -378,5 +396,44 @@
     </div>
   </footer>
 
+  <script>
+    // Phase 1.4: pricing CTAs (Solo + Pro) — POST to /api/v1/billing/checkout
+    // so unauthenticated visitors get bounced through the signup flow first.
+    // Free and self-host stay as plain anchor links.
+    (function () {
+      document.addEventListener('click', function (ev) {
+        var a = ev.target.closest && ev.target.closest('a[data-checkout]');
+        if (!a) return;
+        var plan = a.getAttribute('data-checkout');
+        if (plan !== 'solo' && plan !== 'pro') return;
+        ev.preventDefault();
+        a.classList.add('opacity-60', 'pointer-events-none');
+        fetch('/api/v1/billing/checkout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: plan })
+        })
+          .then(function (r) {
+            if (r.status === 401) {
+              // Not signed in yet — push through signup, preserving plan intent
+              window.location.href = '/app/signup?plan=' + encodeURIComponent(plan) + '&next=checkout';
+              return null;
+            }
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function (data) {
+            if (!data || !data.url) return;
+            window.location.href = data.url;
+          })
+          .catch(function (err) {
+            console.error('checkout failed:', err);
+            a.classList.remove('opacity-60', 'pointer-events-none');
+            alert('Could not start checkout — please try again or sign in first.');
+          });
+      });
+    })();
+  </script>
 </body>
 </html>

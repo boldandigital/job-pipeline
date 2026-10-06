@@ -126,7 +126,16 @@
           errBox.classList.remove("hidden");
           return;
         }
-        window.location.href = "/app/";
+        // Send the Captain back where the 401 bounced him from, if the
+        // dashboard stashed it. Same-origin paths only — never follow an
+        // absolute URL out of sessionStorage.
+        const back = sessionStorage.getItem("captain_return_to");
+        if (back && back.startsWith("/") && !back.startsWith("//")) {
+          sessionStorage.removeItem("captain_return_to");
+          window.location.href = back;
+        } else {
+          window.location.href = "/app/";
+        }
       } catch (err) {
         errBox.textContent = "Network error. Check your connection.";
         errBox.classList.remove("hidden");

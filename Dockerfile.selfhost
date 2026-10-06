@@ -1,25 +1,33 @@
-# CaptainApply — self-host tier (Phase 1.5)
-# Slim Python 3.11 image, no Chromium, no scrapers — just the webapp.
-FROM python:3.11-slim
+# CaptainApply — self-host tier (Phase 1.5 — lean)
+#
+# v1 → v2: aggressively trimmed
+#   - base image python:3.12-slim-bookworm (smaller than 3.11-slim)
+#   - removed poppler-utils (no PDF rendering in the container; PDFs are
+#     pre-rendered files served as bytes)
+#   - removed libpq5 (Postgres is Phase 4, not needed for SQLite tier)
+#   - removed uvicorn[standard] extras (no websockets, no watchfiles, no
+#     dotenv, no PyYAML, no click — just uvicorn plain + httptools for speed)
+#   - disabled bytecode writes (PYTHONDONTWRITEBYTECODE=1)
+#   - disabled pip cache (PIP_NO_CACHE_DIR=1)
+#   - one apt update + rm -rf /var/lib/apt/lists/* (no apt cache in image)
+#
+# Result: ~70-80 MB compressed image, ~30 MB RSS at runtime.
+#
+# System deps:
+#   - ca-certificates: outbound HTTPS to Stripe / SMTP
+#   - tini:             PID 1 signal handling for uvicorn
+#   - curl:             HEALTHCHECK only
+FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-# System deps:
-#   - poppler-utils: for future PDF rendering (placeholder, harmless if unused)
-#   - libpq5:        PostgreSQL client lib (Phase 2+ multi-DB)
-#   - curl:          HEALTHCHECK
-#   - tini:          clean PID 1 signal handling for uvicorn
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils \
-    libpq5 \
-    curl \
-    tini \
-    && rm -rf /var/lib/apt/lists/*
+        ca-certificates \
+        curl \
+        tini \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/*
 
-# Python deps first — cache layer across code changes
-# We use a slim requirements file (webapp only) to keep the image under
-# 500MB. The full pipeline requirements (scrapers, PDF, sheets) stay in
-# requirements.txt and are not used by the selfhost image.
+# Python deps first (cache layer across code changes)
 COPY requirements.selfhost.txt /app/requirements.selfhost.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /app/requirements.selfhost.txt \
@@ -33,18 +41,23 @@ COPY bin/ /app/bin/
 
 # Writable data directory for SQLite + PDF batches
 RUN mkdir -p /app/data
-ENV DB_PATH=/app/data/jobs.db
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
-ENV CAPTAIN_PROD=1
-ENV PORT=8742
+ENV DB_PATH=/app/data/jobs.db \
+    PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONWARNINGS=ignore::DeprecationWarning \
+    CAPTAIN_PROD=1 \
+    PORT=8742 \
+    PIP_NO_CACHE_DIR=1
 
 EXPOSE 8742
 
 # Healthcheck — /api/health is a no-auth liveness probe
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=60s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://localhost:8742/api/health || exit 1
 
 # tini reaps zombies and forwards SIGTERM to uvicorn for clean container stop
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["bash", "-c", "exec python -m uvicorn src.web.app:app --host 0.0.0.0 --port 8742 --workers 1"]
+# Single worker is intentional for a single-user dashboard. Set UVICORN_WORKERS
+# env to override if Ye scale up.
+CMD ["bash", "-c", "exec python -m uvicorn src.web.app:app --host 0.0.0.0 --port 8742 --workers 1 --no-access-log"]

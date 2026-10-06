@@ -1,10 +1,14 @@
 # Self-host tier — minimal webapp dependencies.
+# v2 (lean): dropped uvicorn[standard] extras (no websockets/watchfiles/uvloop/
+# click/dotenv/PyYAML — none are used by our webapp). Plain uvicorn + httptools
+# is faster + smaller.
+#
 # The full pipeline (scrapers, PDF rendering, Google Sheets) live in the
 # project-root requirements.txt and are intentionally NOT pulled in here.
-# This keeps the self-host image under 500MB.
 
 fastapi>=0.110.0
-uvicorn[standard]>=0.27.0
+uvicorn>=0.27.0          # plain — no [standard] extras
+httptools>=0.6.0         # faster HTTP parser, tiny extra
 jinja2>=3.1.0
 pydantic>=2.0
-python-multipart>=0.0.9
+# python-multipart removed: not used — we read JSON bodies only

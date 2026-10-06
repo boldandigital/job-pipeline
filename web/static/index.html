@@ -379,18 +379,20 @@
         let isOn = false;
         let gateState = 'locked';
         let noteText = '';
+        // NB: read isOn BEFORE computing noteText — the old order evaluated the
+        // note while isOn was still false, so a finished gate read "Ready to review".
         if (stage === 'cv') {
           isOn = cvOk;
           gateState = 'active';
           noteText = isOn ? 'Approved · unlocks gate 02' : 'Ready to review · unlocks gate 02';
         } else if (stage === 'anschreiben') {
+          isOn = ansOk;
           if (cvOk) { gateState = 'active'; noteText = isOn ? 'Approved · unlocks gate 03' : 'Ready to review · unlocks gate 03'; }
           else { gateState = 'locked'; noteText = 'Locked · waiting on gate 01'; }
-          isOn = ansOk;
-        } else if (stage === 'motivation') {
+        } else {
+          isOn = motOk;
           if (ansOk) { gateState = 'active'; noteText = isOn ? 'Approved · all gates cleared' : 'Ready to review · all gates next'; }
           else { gateState = 'locked'; noteText = 'Locked · waiting on gate 02'; }
-          isOn = motOk;
         }
         g.setAttribute('data-state', isOn ? 'done' : gateState);
         mark.textContent = isOn ? '✓' : '○';
