@@ -13,49 +13,90 @@
 </head>
 <body>
 
-  <!-- SVG defs (gradients for score rings) -->
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <defs>
-      <linearGradient id="grad-cyan" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#67e8f9"/>
-        <stop offset="100%" stop-color="#0891b2"/>
-      </linearGradient>
-      <linearGradient id="grad-cyan-flat" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="#22d3ee"/>
-        <stop offset="100%" stop-color="#0e7490"/>
-      </linearGradient>
-    </defs>
-  </svg>
-
-  <!-- ============================================
-       TOP BAR
-       ============================================ -->
-  <header class="topbar" role="banner">
-    <div class="topbar__brand">
-      <div class="topbar__anchor" aria-hidden="true">⚓</div>
-      <div>
-        <div class="topbar__title">Captain's Bridge</div>
-        <div class="topbar__sub">job-pipeline · v0.7.0 · localhost:8742</div>
+  <!-- v3: shadcn-style sidebar (left rail) -->
+  <div class="app">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="sidebar__brand">
+        <div class="sidebar__brand-mark">⚓</div>
+        <div>
+          <div class="sidebar__brand-name">CaptainApply</div>
+          <div class="sidebar__brand-sub">v0.7.0 · localhost:8742</div>
+        </div>
       </div>
+
+      <nav class="sidebar__nav">
+        <div>
+          <div class="nav-section__title">Workspace</div>
+          <a class="nav-item is-active" href="#jobs"><span class="nav-item__icon">⚓</span> Job Bridge <span class="nav-item__badge" id="nav-badge">7</span></a>
+          <a class="nav-item" href="#approved"><span class="nav-item__icon">★</span> Approved <span class="nav-item__badge" id="nav-approved">0</span></a>
+          <a class="nav-item" href="#skipped"><span class="nav-item__icon">✗</span> Skipped <span class="nav-item__badge" id="nav-skipped">0</span></a>
+        </div>
+        <div>
+          <div class="nav-section__title">Pipeline</div>
+          <a class="nav-item" href="#scrape"><span class="nav-item__icon">⌕</span> Scrape <span class="nav-item__badge">3</span></a>
+          <a class="nav-item" href="#render"><span class="nav-item__icon">▤</span> CV Render <span class="nav-item__badge">10</span></a>
+          <a class="nav-item" href="#submit"><span class="nav-item__icon">↗</span> Apply</a>
+        </div>
+        <div>
+          <div class="nav-section__title">Account</div>
+          <a class="nav-item" href="#profile"><span class="nav-item__icon">◉</span> Profile</a>
+          <a class="nav-item" href="#settings"><span class="nav-item__icon">⚙</span> Settings</a>
+        </div>
+      </nav>
+
+      <div class="sidebar__user">
+        <div class="avatar">LZ</div>
+        <div class="sidebar__user-meta">
+          <div class="user__name">Lars Zimmermann</div>
+          <div class="user__role">Captain · 12+ yrs</div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main">
+
+  <!-- v3: topbar (sticky) — modern slim, breadcrumbs + search + actions -->
+  <header class="topbar" role="banner">
+    <div class="topbar__crumbs">
+      <span>Workspace</span>
+      <span class="sep">/</span>
+      <span>Job Bridge</span>
     </div>
 
-    <div class="topbar__center" role="status" aria-label="Pipeline status">
-      <span class="chip"><span class="chip__dot" aria-hidden="true"></span><span class="chip__label">today</span> <span class="chip__num" id="cnt-today">9</span> <span class="chip__label">new</span></span>
-      <span class="chip"><span class="chip__dot" aria-hidden="true"></span><span class="chip__label">auto-fit</span> <span class="chip__num" id="cnt-autofit">3</span></span>
-      <span class="chip"><span class="chip__dot" aria-hidden="true"></span><span class="chip__label">approved</span> <span class="chip__num" id="cnt-approved">0</span></span>
-      <span class="chip"><span class="chip__dot" aria-hidden="true"></span><span class="chip__label">skipped</span> <span class="chip__num" id="cnt-skipped">0</span></span>
-    </div>
-
-    <div class="topbar__right">
+    <div class="topbar__actions">
       <label class="search" aria-label="Search jobs">
-        <span aria-hidden="true">🔍</span>
-        <input type="search" placeholder="Search title, company, city…" />
-        <kbd>⌘K</kbd>
+        <span class="search__icon" aria-hidden="true">⌕</span>
+        <input type="search" placeholder="Search jobs…" />
       </label>
-      <a class="btn btn--ghost" href="#pipeline" style="color: var(--slate-200); border-color: var(--navy-700); background: var(--navy-800);">⚙ Settings</a>
-      <a class="avatar" href="#captain" title="Lars Zimmermann" aria-label="Lars Zimmermann, Captain">LZ</a>
+      <button class="btn btn--ghost btn--sm">⚙ Settings</button>
+      <div class="avatar" title="Lars Zimmermann">LZ</div>
     </div>
   </header>
+
+  <!-- ============================================
+       CONTENT
+       ============================================ -->
+  <main class="content" id="jobs">
+    <div class="page-header">
+      <div class="page-header__eyebrow">
+        <span class="dot"></span>
+        <span>Today's catch</span>
+        <span>·</span>
+        <span>ranked by match</span>
+      </div>
+      <h1 class="page-header__title" id="page-title">7 new roles — your move, Captain.</h1>
+      <div class="page-header__meta">
+        <span><strong>€65k</strong> salary floor</span>
+        <span>·</span>
+        <span><strong>3</strong> sources active</span>
+        <span>·</span>
+        <span><strong>3</strong> real jobs</span>
+        <span>·</span>
+        <span><strong>6</strong> ghosted</span>
+        <span>·</span>
+        <span><strong>94</strong> top match</span>
+      </div>
+    </div>
 
   <!-- ============================================
        HERO STRIP
@@ -629,9 +670,15 @@
 
       </section>
     </main>
+    </div><!-- /main -->
 
-    <!-- ============= RIGHT RAIL ============= -->
-    <aside class="rail" aria-label="Pipeline statistics sidebar">
+    <!-- v3: hide the v2 right rail (replaced by the new sidebar) -->
+    <style>.shell > .rail, .shell .rail { display: none !important; }</style>
+    <style>.shell { display: block !important; grid-template-columns: 1fr !important; }</style>
+    <style>.hero { display: none !important; }</style>  <!-- v2 hero is replaced by v3 page-header -->
+
+    <!-- ============= RIGHT RAIL (v2) — hidden by CSS above ============= -->
+    <aside class="rail hidden" aria-label="Pipeline statistics sidebar">
 
       <!-- Captain widget -->
       <div class="widget widget--dark" id="captain">
@@ -987,5 +1034,6 @@
 
   })();
   </script>
+  </div><!-- /app -->
 </body>
 </html>
