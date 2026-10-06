@@ -443,7 +443,20 @@ def auth_me(request: Request):
 # ---------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
-def root():
+def root(request: Request):
+    """Serve the marketing landing page (Phase 1.3 — public).
+
+    The dashboard lives at /app — see app_dashboard() below.
+    """
+    marketing_path = STATIC_DIR / "marketing.html"
+    if not marketing_path.exists():
+        return HTMLResponse("<h1>CaptainApply</h1><p>Landing page not built yet.</p>")
+    return HTMLResponse(marketing_path.read_text())
+
+
+@app.get("/app/", response_class=HTMLResponse)
+def app_dashboard():
+    """The Captain's Bridge dashboard — protected by session auth."""
     return index_page()
 
 
