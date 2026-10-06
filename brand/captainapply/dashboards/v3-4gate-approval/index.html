@@ -1,0 +1,886 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Card approval workflow · CaptainApply</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ─── tokens ────────────────────────────────────────────────────────────
+     Brand literals live here and nowhere else. Three brand hexes, each
+     declared under every role it actually serves (shadcn role tokens and
+     brand tokens coexist deliberately). Everything else is derived. */
+  :root {
+    --navy:        #0F172A;   /* brand ink            · headings, score ring  */
+    --foreground:  #0F172A;   /* shadcn role          · primary text         */
+    --sidebar:     #0F172A;   /* shadcn role          · app sidebar surface */
+
+    --cyan:        #06B6D4;   /* brand accent         · eyebrow bar           */
+    --accent:      #06B6D4;   /* shadcn role          · approve button fill   */
+    --ring:        #06B6D4;   /* shadcn role          · focus ring            */
+
+    --emerald:     #10B981;   /* brand success        · gate-complete mark    */
+    --success:     #10B981;   /* shadcn role          · gate-complete state   */
+
+    /* neutrals — derived, no literals */
+    --canvas:       oklch(0.981 0.002 250);
+    --surface:      oklch(1 0 0);
+    --surface-2:    oklch(0.968 0.003 250);
+    --surface-3:    oklch(0.945 0.004 250);
+    --border:       oklch(0.912 0.005 250);
+    --border-2:     oklch(0.862 0.006 250);
+    --muted:        oklch(0.520 0.018 255);
+    --muted-2:      oklch(0.672 0.012 252);
+
+    --ink-line:     color-mix(in oklch, var(--navy) 11%, var(--border));
+    --ink-soft:     color-mix(in oklch, var(--navy) 5%, transparent);
+    --accent-soft:  color-mix(in oklch, var(--accent) 13%, transparent);
+    --accent-lift:  color-mix(in oklch, var(--accent) 80%, white);
+    --success-soft: color-mix(in oklch, var(--success) 11%, var(--surface));
+    --success-line: color-mix(in oklch, var(--success) 34%, var(--border));
+    /* emerald darkened toward navy so marks and small text clear 4.5:1 on the
+       emerald tint; raw #10B981 only ever sits as the tint/rule itself */
+    --success-ink:  color-mix(in oklch, var(--success) 65%, var(--navy));
+
+    --on-dark:       oklch(0.972 0.002 250);
+    --on-dark-muted: oklch(0.700 0.014 252);
+    --on-dark-line:  color-mix(in oklch, oklch(1 0 0) 11%, transparent);
+    --on-dark-soft:  color-mix(in oklch, oklch(1 0 0) 6%, transparent);
+
+    --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
+    --font-body:    'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+    --r-card: 12px;
+    --r-ctl: 8px;
+    --r-chip: 6px;
+
+    --side-w: 248px;
+    --bar-h: 56px;
+  }
+
+  /* ─── reset ───────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--foreground);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4 { margin: 0; text-wrap: balance; font-family: var(--font-display); letter-spacing: -0.018em; }
+  p { margin: 0; text-wrap: pretty; }
+  svg { display: block; }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .u   { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .dim { color: var(--muted); }
+  .vh  { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* ─── app shell ───────────────────────────────────────────────────── */
+  .shell { display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr); min-height: 100vh; }
+
+  /* sidebar — the page's only dark surface */
+  .side {
+    background: var(--sidebar);
+    color: var(--on-dark);
+    padding: 20px 14px;
+    display: flex; flex-direction: column; gap: 24px;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .side__brand { display: flex; align-items: center; gap: 10px; padding-inline: 8px; }
+  .side__mark {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: var(--on-dark); color: var(--sidebar);
+    display: grid; place-items: center;
+    font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0;
+  }
+  .side__word { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .side__group { display: flex; flex-direction: column; gap: 2px; }
+  .side__label { padding: 0 10px 8px; color: var(--on-dark-muted); font-size: 10.5px; letter-spacing: 0.11em; text-transform: uppercase; }
+  .side__link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: var(--r-ctl);
+    color: var(--on-dark-muted); font-size: 13.5px; font-weight: 500;
+    transition: background-color .16s ease, color .16s ease;
+  }
+  .side__link:hover { background: var(--on-dark-soft); color: var(--on-dark); }
+  .side__link[aria-current="page"] { background: var(--on-dark-soft); color: var(--on-dark); }
+  .side__link svg { width: 15px; height: 15px; flex: none; opacity: .85; }
+  .side__foot { margin-top: auto; padding: 12px 10px 0; border-top: 1px solid var(--on-dark-line); color: var(--on-dark-muted); font-size: 11px; }
+
+  /* topbar */
+  .bar {
+    position: sticky; top: 0; z-index: 20;
+    height: var(--bar-h);
+    background: color-mix(in oklch, var(--canvas) 88%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 16px;
+    padding-inline: 24px;
+  }
+  .bar__search {
+    display: flex; align-items: center; gap: 8px;
+    flex: 1; max-width: 380px; height: 32px;
+    padding-inline: 10px;
+    border: 1px solid var(--border); border-radius: var(--r-ctl);
+    background: var(--surface); color: var(--muted-2); font-size: 13px;
+    transition: border-color .16s ease;
+  }
+  .bar__search:hover { border-color: var(--border-2); }
+  .bar__search svg { width: 14px; height: 14px; flex: none; }
+  .bar__kbd { margin-left: auto; }
+  .bar__spacer { flex: 1; }
+  .bar__right { display: flex; align-items: center; gap: 10px; }
+  .plan {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 26px; padding-inline: 10px;
+    border: 1px solid var(--border-2); border-radius: 999px;
+    background: var(--surface);
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .plan__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--emerald); flex: none; }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--navy); color: var(--on-dark);
+    display: grid; place-items: center;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  }
+
+  /* ─── canvas ──────────────────────────────────────────────────────── */
+  .canvas { padding: 32px 24px 72px; max-width: 1560px; }
+
+  .head { margin-bottom: 24px; }
+  .eyebrow { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .eyebrow__bar { width: 4px; height: 14px; background: var(--accent); flex: none; }
+  .eyebrow__txt {
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.13em; text-transform: uppercase; color: var(--foreground);
+  }
+  .head__row { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  .head h1 { font-size: clamp(24px, 2.4vw, 30px); font-weight: 600; line-height: 1.15; }
+  .head__sub { margin-top: 8px; color: var(--muted); font-size: 13.5px; max-width: 62ch; }
+  .tally { display: flex; gap: 28px; }
+  .tally__n { font-family: var(--font-display); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
+  .tally__l { margin-top: 5px; color: var(--muted); font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; }
+
+  /* ─── card grid ───────────────────────────────────────────────────── */
+  .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+
+  .card {
+    display: flex; flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    transition: transform .18s ease, border-color .18s ease;
+  }
+  .card:hover { transform: translateY(-2px); border-color: color-mix(in oklch, var(--accent) 34%, var(--border)); }
+
+  .card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 16px 18px 14px; }
+  .co { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .co__idx {
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px;
+  }
+  .co__name { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.012em; }
+  .role { font-size: 13px; font-weight: 500; color: var(--foreground); }
+  .meta-line { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+
+  .score {
+    width: 46px; height: 46px; flex: none;
+    border: 1px solid var(--ink-line); border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+    font-variant-numeric: tabular-nums; color: var(--foreground);
+  }
+  .score--weak { border-color: var(--border); color: var(--muted); }
+  .score-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center;
+    height: 22px; padding-inline: 9px;
+    border-radius: var(--r-chip);
+    background: var(--navy); color: var(--on-dark);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .chip--ghost { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+
+  /* ─── document preview ────────────────────────────────────────────── */
+  .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 18px 16px; }
+  .pane { border: 1px solid var(--border); border-radius: var(--r-chip); overflow: hidden; background: var(--surface-2); }
+  .pane__bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    padding: 6px 8px; border-bottom: 1px solid var(--border); background: var(--surface);
+  }
+  .pane__name { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .pane__ext  { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted-2); }
+  .pane__doc {
+    aspect-ratio: 4 / 3; overflow: hidden;
+    padding: 12px 11px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .doc__t { font-family: var(--font-display); font-size: 11px; font-weight: 600; color: var(--foreground); }
+  .doc__h { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted-2); margin-top: 4px; }
+  .ln { height: 4px; border-radius: 2px; background: var(--surface-3); }
+  .ln--ink { background: var(--border-2); }
+
+  /* loading skeleton */
+  .skel { aspect-ratio: 4 / 3; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .skel__dots { display: flex; gap: 5px; }
+  .skel__dots i {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--border-2);
+    animation: pulse 1.25s ease-in-out infinite;
+  }
+  .skel__dots i:nth-child(2) { animation-delay: .16s; }
+  .skel__dots i:nth-child(3) { animation-delay: .32s; }
+  .skel__ln { height: 5px; border-radius: 3px; background: var(--surface-3); animation: pulse 1.25s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+
+  /* ─── gate strip ──────────────────────────────────────────────────── */
+  .gates { border-top: 1px solid var(--border); padding: 2px 18px 4px; }
+
+  .gate { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
+  .gate + .gate { border-top: 1px solid var(--border); }
+
+  .gate__idx {
+    width: 21px; height: 21px; flex: none;
+    display: grid; place-items: center;
+    border: 1px solid var(--border-2); border-radius: 5px;
+    font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+  }
+  .gate__mark { width: 16px; height: 16px; flex: none; color: var(--muted-2); }
+  .gate__txt { min-width: 0; flex: 1; }
+  .gate__label { display: block; font-size: 13px; font-weight: 500; color: var(--foreground); }
+  .gate__note  { display: block; font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+
+  .gate__act {
+    flex: none; display: inline-flex; align-items: center; gap: 6px;
+    height: 27px; padding-inline: 11px;
+    border: 1px solid var(--border-2); border-radius: var(--r-ctl);
+    background: var(--surface);
+    font-size: 12px; font-weight: 500; color: var(--foreground);
+    transition: background-color .16s ease, border-color .16s ease, transform .05s ease;
+  }
+  .gate__act svg { width: 12px; height: 12px; }
+  .gate__act:hover { border-color: var(--foreground); background: var(--surface-2); }
+  .gate__act:active { transform: translateY(1px); }
+  .gate__act--link { border-color: transparent; background: none; padding-inline: 6px; color: var(--muted); }
+  .gate__act--link:hover { background: var(--ink-soft); color: var(--foreground); }
+
+  .gate__hint { flex: none; font-family: var(--font-mono); font-size: 10.5px; color: var(--muted-2); }
+
+  /* state: done */
+  .gate[data-state="done"] .gate__idx { border-color: var(--success-line); background: var(--success-soft); color: var(--success); }
+  .gate[data-state="done"] .gate__mark { color: var(--success); }
+  .gate[data-state="done"] .gate__note { color: var(--success); }
+  .gate[data-state="done"] { background: var(--success-soft); box-shadow: inset 2px 0 0 var(--success); }
+  .gate[data-state="done"] + .gate { border-top-color: transparent; }
+
+  /* state: locked */
+  .gate[data-state="locked"] .gate__idx { border-style: dashed; border-color: var(--border); color: var(--muted-2); }
+  .gate[data-state="locked"] .gate__label { color: var(--muted); font-weight: 400; }
+
+  /* state: active */
+  .gate[data-state="active"] .gate__idx { border-color: var(--foreground); color: var(--foreground); }
+  .gate[data-state="active"] .gate__mark { color: var(--foreground); }
+  .gate[data-state="active"] .gate__act { border-color: var(--ink-line); }
+
+  /* ─── approve row ─────────────────────────────────────────────────── */
+  .approve-row { border-top: 1px solid var(--border); padding: 12px 18px 14px; }
+  .approve {
+    width: 100%; height: 38px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    border-radius: var(--r-ctl);
+    font-size: 13.5px; font-weight: 600; letter-spacing: -0.005em;
+    transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .05s ease;
+  }
+  .approve svg { width: 14px; height: 14px; }
+
+  .approve[aria-disabled="true"] {
+    background: var(--surface-2); color: var(--muted-2);
+    border: 1px solid var(--border);
+    cursor: not-allowed;
+  }
+  .approve[aria-disabled="true"]:hover { background: var(--surface-3); color: var(--muted); border-color: var(--border-2); }
+
+  .approve--on { background: var(--accent); color: var(--navy); border: 1px solid var(--accent); }
+  .approve--on:hover { background: var(--accent-deep); border-color: var(--accent-deep); box-shadow: 0 3px 12px color-mix(in oklch, var(--accent) 38%, transparent); }
+  .approve--on:active { transform: translateY(1px); box-shadow: none; }
+  .approve--on:focus-visible { outline-color: var(--navy); }
+
+  .approve-note { margin-top: 8px; font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-align: center; }
+  .approve-note--ok { color: var(--success); }
+
+  /* tooltip */
+  .tip { position: relative; display: block; }
+  .tip__b {
+    position: absolute; left: 50%; bottom: calc(100% + 9px);
+    transform: translateX(-50%) translateY(3px);
+    z-index: 30; white-space: nowrap;
+    padding: 6px 9px; border-radius: 6px;
+    background: var(--navy); color: var(--on-dark);
+    font-family: var(--font-mono); font-size: 10.5px;
+    opacity: 0; pointer-events: none;
+    transition: opacity .14s ease, transform .14s ease;
+  }
+  .tip:hover .tip__b, .tip:focus-within .tip__b { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ─── state reference ─────────────────────────────────────────────── */
+  .ref { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 26px; }
+  .ref__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 18px; }
+  .ref__box { border: 1px solid var(--border); border-radius: var(--r-card); background: var(--surface); padding: 16px; }
+  .ref__t { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.11em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+  .rules { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 9px; }
+  .rules li { display: flex; gap: 9px; font-size: 12.5px; color: var(--muted); }
+  .rules b { color: var(--foreground); font-weight: 500; }
+  .rules .mono { color: var(--foreground); font-size: 11.5px; }
+
+  .empty {
+    border: 1px dashed var(--border-2); border-radius: var(--r-card);
+    padding: 26px 18px; text-align: center;
+  }
+  .empty__t { font-family: var(--font-display); font-size: 14px; font-weight: 600; }
+  .empty__s { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+  .empty .btn { margin-top: 14px; }
+
+  .btn-ghost {
+    display: inline-flex; align-items: center; height: 30px; padding-inline: 12px;
+    border: 1px solid var(--border-2); border-radius: var(--r-ctl);
+    font-size: 12.5px; font-weight: 500;
+    transition: border-color .16s ease, background-color .16s ease;
+  }
+  .btn-ghost:hover { border-color: var(--foreground); background: var(--surface-2); }
+
+  /* ─── responsive ──────────────────────────────────────────────────── */
+  @media (max-width: 1180px) {
+    .cards { grid-template-columns: minmax(0, 1fr); }
+    .ref__grid { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 1000px) {
+    .shell { grid-template-columns: minmax(0, 1fr); }
+    .side {
+      position: static; height: auto; flex-direction: row; align-items: center;
+      gap: 16px; padding: 12px 16px; overflow-x: auto;
+    }
+    .side__group { flex-direction: row; gap: 4px; }
+    .side__label, .side__foot { display: none; }
+  }
+  @media (max-width: 768px) {
+    .canvas { padding: 24px 16px 56px; }
+    .bar { padding-inline: 16px; gap: 10px; }
+    .bar__search { max-width: none; }
+    .bar__kbd { display: none; }
+    .head__row { align-items: flex-start; }
+    .tally { gap: 20px; }
+    .card__head, .panes, .gates, .approve-row { padding-inline: 14px; }
+    .score { width: 40px; height: 40px; font-size: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
+    .skel__dots i, .skel__ln { opacity: .8; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── sidebar ─────────────────────────────────────────────────────── -->
+  <aside class="side" data-od-id="sidebar">
+    <div class="side__brand">
+      <span class="side__mark" aria-hidden="true">C</span>
+      <span class="side__word">CaptainApply</span>
+    </div>
+
+    <nav class="side__group" aria-label="Workspace">
+      <p class="side__label">Workspace.</p>
+      <a class="side__link" href="#" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Pipeline
+      </a>
+      <a class="side__link" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        Assignments
+      </a>
+      <a class="side__link" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v5h5"/></svg>
+        Documents
+      </a>
+    </nav>
+
+    <nav class="side__group" aria-label="Account">
+      <p class="side__label">Account.</p>
+      <a class="side__link" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>
+        Profile
+      </a>
+      <a class="side__link" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4l2.5 2.5"/></svg>
+        Run history
+      </a>
+    </nav>
+
+    <p class="side__foot mono">Bold and Digital LLC<br />bot idle · no submits queued</p>
+  </aside>
+
+  <div>
+
+    <!-- ── topbar ────────────────────────────────────────────────────── -->
+    <header class="bar" data-od-id="topbar">
+      <div class="bar__search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        <span>Search roles, companies, documents</span>
+        <span class="bar__kbd mono dim" style="font-size:10.5px;">⌘K</span>
+      </div>
+      <div class="bar__spacer"></div>
+      <div class="bar__right">
+        <span class="plan"><span class="plan__dot" aria-hidden="true"></span>Plan: Founder</span>
+        <span class="avatar" aria-label="Signed in as Lars von Hierblau">LvH</span>
+      </div>
+    </header>
+
+    <!-- ── canvas ────────────────────────────────────────────────────── -->
+    <main class="canvas" id="content">
+
+      <div class="head" data-od-id="canvas-head">
+        <p class="eyebrow"><span class="eyebrow__bar" aria-hidden="true"></span><span class="eyebrow__txt">Card approval workflow.</span></p>
+        <div class="head__row">
+          <div>
+            <h1>Four gates before anything leaves the browser.</h1>
+            <p class="head__sub">Every assignment opens at gate 01. CV, Anschreiben and Motivation unlock in order, and the submit button stays dark until all three carry your approval.</p>
+          </div>
+          <div class="tally">
+            <div><div class="tally__n mono">4</div><div class="tally__l">Awaiting review</div></div>
+            <div><div class="tally__n mono">1</div><div class="tally__l">Ready to submit</div></div>
+            <div><div class="tally__n mono">0</div><div class="tally__l">Submitted</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cards" data-od-id="job-cards">
+
+        <!-- ═══ CARD 1 · Andercore — gate 01 done, 02 active, 03 locked ═══ -->
+        <article class="card" data-od-id="card-andercore">
+          <div class="card__head">
+            <div>
+              <div class="co">
+                <span class="co__idx mono">79</span>
+                <span class="co__name">Andercore</span>
+              </div>
+              <p class="role">Chief of Staff — Strategy AI Enablement</p>
+              <p class="meta-line">Berlin · hybrid · 40 h / week</p>
+            </div>
+            <div class="score-wrap">
+              <span class="score mono" aria-label="Match score 1940">1940</span>
+              <span class="chip mono">€74–€135k</span>
+            </div>
+          </div>
+
+          <div class="panes">
+            <div class="pane">
+              <div class="pane__bar"><span class="pane__name">Job description</span><span class="pane__ext">pdf</span></div>
+              <div class="pane__doc">
+                <span class="doc__t">Chief of Staff</span>
+                <span class="ln ln--ink" style="width:74%"></span>
+                <span class="ln" style="width:92%"></span>
+                <span class="ln" style="width:86%"></span>
+                <span class="doc__h">What you own</span>
+                <span class="ln" style="width:90%"></span>
+                <span class="ln" style="width:78%"></span>
+                <span class="ln" style="width:64%"></span>
+              </div>
+            </div>
+            <div class="pane">
+              <div class="pane__bar"><span class="pane__name">CV</span><span class="pane__ext">pdf</span></div>
+              <div class="pane__doc">
+                <span class="doc__t">Lars von Hierblau</span>
+                <span class="ln ln--ink" style="width:60%"></span>
+                <span class="ln" style="width:94%"></span>
+                <span class="ln" style="width:88%"></span>
+                <span class="doc__h">Leadership</span>
+                <span class="ln" style="width:92%"></span>
+                <span class="ln" style="width:82%"></span>
+                <span class="ln" style="width:70%"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="gates" role="group" aria-label="Approval gates for Andercore">
+            <div class="gate" data-state="done">
+              <span class="gate__idx mono" aria-hidden="true">01</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">CV</span>
+                <span class="gate__note">Approved · gate 02 unlocked</span>
+              </span>
+              <button class="gate__act gate__act--link" aria-label="Remove approval on CV for Andercore">uncheck</button>
+            </div>
+
+            <div class="gate" data-state="active">
+              <span class="gate__idx mono" aria-hidden="true">02</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">Anschreiben</span>
+                <span class="gate__note">Ready to review · unlocks gate 03</span>
+              </span>
+              <button class="gate__act" aria-label="Mark Anschreiben as approved for Andercore">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+                Mark ok
+              </button>
+            </div>
+
+            <div class="gate" data-state="locked" aria-disabled="true">
+              <span class="gate__idx mono" aria-hidden="true">03</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">Motivation</span>
+                <span class="gate__note">Locked · waiting on gate 02</span>
+              </span>
+              <span class="gate__hint">locked</span>
+            </div>
+          </div>
+
+          <div class="approve-row">
+            <span class="tip">
+              <button class="approve" aria-disabled="true" aria-describedby="tip-andercore" aria-label="Approve and submit Andercore. Disabled until CV, Anschreiben and Motivation are all approved.">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>
+                Approve &amp; Submit
+              </button>
+              <span class="tip__b" role="tooltip" id="tip-andercore">DPX: complete all 3 gates first</span>
+            </span>
+            <p class="approve-note">1 of 3 gates approved.</p>
+          </div>
+        </article>
+
+        <!-- ═══ CARD 2 · xHeron — all pending ═══ -->
+        <article class="card" data-od-id="card-xheron">
+          <div class="card__head">
+            <div>
+              <div class="co">
+                <span class="co__idx mono">80</span>
+                <span class="co__name">xHeron Solutions</span>
+              </div>
+              <p class="role">Founding Marketer (m/f/x)</p>
+              <p class="meta-line">Berlin · on-site · full time</p>
+            </div>
+            <div class="score-wrap">
+              <span class="score mono" aria-label="Match score 1810">1810</span>
+              <span class="chip chip--ghost mono">Salary not published</span>
+            </div>
+          </div>
+
+          <div class="panes">
+            <div class="pane">
+              <div class="pane__bar"><span class="pane__name">Job description</span><span class="pane__ext">pdf</span></div>
+              <div class="pane__doc">
+                <span class="doc__t">Founding Marketer</span>
+                <span class="ln ln--ink" style="width:70%"></span>
+                <span class="ln" style="width:90%"></span>
+                <span class="ln" style="width:84%"></span>
+                <span class="doc__h">You are the first hire</span>
+                <span class="ln" style="width:92%"></span>
+                <span class="ln" style="width:76%"></span>
+                <span class="ln" style="width:58%"></span>
+              </div>
+            </div>
+            <div class="pane">
+              <div class="pane__bar"><span class="pane__name">CV</span><span class="pane__ext">pdf</span></div>
+              <div class="pane__doc">
+                <span class="doc__t">Lars von Hierblau</span>
+                <span class="ln ln--ink" style="width:58%"></span>
+                <span class="ln" style="width:92%"></span>
+                <span class="ln" style="width:86%"></span>
+                <span class="doc__h">Go to market</span>
+                <span class="ln" style="width:88%"></span>
+                <span class="ln" style="width:80%"></span>
+                <span class="ln" style="width:66%"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="gates" role="group" aria-label="Approval gates for xHeron Solutions">
+            <div class="gate" data-state="active">
+              <span class="gate__idx mono" aria-hidden="true">01</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">CV</span>
+                <span class="gate__note">Ready to review · unlocks gate 02</span>
+              </span>
+              <button class="gate__act" aria-label="Mark CV as approved for xHeron Solutions">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+                Mark ok
+              </button>
+            </div>
+
+            <div class="gate" data-state="locked" aria-disabled="true">
+              <span class="gate__idx mono" aria-hidden="true">02</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">Anschreiben</span>
+                <span class="gate__note">Locked · waiting on gate 01</span>
+              </span>
+              <span class="gate__hint">locked</span>
+            </div>
+
+            <div class="gate" data-state="locked" aria-disabled="true">
+              <span class="gate__idx mono" aria-hidden="true">03</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">Motivation</span>
+                <span class="gate__note">Locked · waiting on gate 02</span>
+              </span>
+              <span class="gate__hint">locked</span>
+            </div>
+          </div>
+
+          <div class="approve-row">
+            <span class="tip">
+              <button class="approve" aria-disabled="true" aria-describedby="tip-xheron" aria-label="Approve and submit xHeron Solutions. Disabled until CV, Anschreiben and Motivation are all approved.">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>
+                Approve &amp; Submit
+              </button>
+              <span class="tip__b" role="tooltip" id="tip-xheron">DPX: complete all 3 gates first</span>
+            </span>
+            <p class="approve-note">0 of 3 gates approved.</p>
+          </div>
+        </article>
+
+        <!-- ═══ CARD 3 · businessangels — all 3 done, submit live ═══ -->
+        <article class="card" data-od-id="card-businessangels">
+          <div class="card__head">
+            <div>
+              <div class="co">
+                <span class="co__idx mono">81</span>
+                <span class="co__name">businessangels.de</span>
+              </div>
+              <p class="role">Chief Operating Officer (m/w/d)</p>
+              <p class="meta-line">Berlin · hybrid · 40 h / week</p>
+            </div>
+            <div class="score-wrap">
+              <span class="score mono" aria-label="Match score 1500">1500</span>
+              <span class="chip chip--ghost mono">Salary not published</span>
+            </div>
+          </div>
+
+          <div class="panes">
+            <div class="pane">
+              <div class="pane__bar"><span class="pane__name">Job description</span><span class="pane__ext">pdf</span></div>
+              <div class="pane__doc">
+                <span class="doc__t">Chief Operating Officer</span>
+                <span class="ln ln--ink" style="width:76%"></span>
+                <span class="ln" style="width:88%"></span>
+                <span class="ln" style="width:90%"></span>
+                <span class="doc__h">Portfolio</span>
+                <span class="ln" style="width:86%"></span>
+                <span class="ln" style="width:74%"></span>
+                <span class="ln" style="width:62%"></span>
+              </div>
+            </div>
+            <div class="pane">
+              <div class="pane__bar"><span class="pane__name">CV</span><span class="pane__ext">pdf</span></div>
+              <div class="pane__doc">
+                <span class="doc__t">Lars von Hierblau</span>
+                <span class="ln ln--ink" style="width:60%"></span>
+                <span class="ln" style="width:94%"></span>
+                <span class="ln" style="width:84%"></span>
+                <span class="doc__h">Operations</span>
+                <span class="ln" style="width:90%"></span>
+                <span class="ln" style="width:78%"></span>
+                <span class="ln" style="width:68%"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="gates" role="group" aria-label="Approval gates for businessangels.de">
+            <div class="gate" data-state="done">
+              <span class="gate__idx mono" aria-hidden="true">01</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">CV</span>
+                <span class="gate__note">Approved</span>
+              </span>
+              <button class="gate__act gate__act--link" aria-label="Remove approval on CV for businessangels.de">uncheck</button>
+            </div>
+
+            <div class="gate" data-state="done">
+              <span class="gate__idx mono" aria-hidden="true">02</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">Anschreiben</span>
+                <span class="gate__note">Approved</span>
+              </span>
+              <button class="gate__act gate__act--link" aria-label="Remove approval on Anschreiben for businessangels.de">uncheck</button>
+            </div>
+
+            <div class="gate" data-state="done">
+              <span class="gate__idx mono" aria-hidden="true">03</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">Motivation</span>
+                <span class="gate__note">Approved · all gates cleared</span>
+              </span>
+              <button class="gate__act gate__act--link" aria-label="Remove approval on Motivation for businessangels.de">uncheck</button>
+            </div>
+          </div>
+
+          <div class="approve-row">
+            <button class="approve approve--on" aria-label="Approve and submit businessangels.de. All three gates are approved, this will send the application.">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+              Approve &amp; Submit
+            </button>
+            <p class="approve-note approve-note--ok">All 3 gates approved · bot submits on click.</p>
+          </div>
+        </article>
+
+        <!-- ═══ CARD 4 · Zasta — CV still rendering ═══ -->
+        <article class="card" data-od-id="card-zasta">
+          <div class="card__head">
+            <div>
+              <div class="co">
+                <span class="co__idx mono">82</span>
+                <span class="co__name">Zasta Karriere</span>
+              </div>
+              <p class="role">Chief of Staff (m/w/d)</p>
+              <p class="meta-line">Berlin · hybrid · 40 h / week</p>
+            </div>
+            <div class="score-wrap">
+              <span class="score score--weak mono" aria-label="Match score 210, below the review threshold">210</span>
+              <span class="chip chip--ghost mono">Below threshold</span>
+            </div>
+          </div>
+
+          <div class="panes">
+            <div class="pane">
+              <div class="pane__bar"><span class="pane__name">Job description</span><span class="pane__ext">pdf</span></div>
+              <div class="pane__doc">
+                <span class="doc__t">Chief of Staff</span>
+                <span class="ln ln--ink" style="width:70%"></span>
+                <span class="ln" style="width:86%"></span>
+                <span class="ln" style="width:80%"></span>
+                <span class="doc__h">Mandate</span>
+                <span class="ln" style="width:88%"></span>
+                <span class="ln" style="width:72%"></span>
+                <span class="ln" style="width:56%"></span>
+              </div>
+            </div>
+            <div class="pane">
+              <div class="pane__bar"><span class="pane__name">CV</span><span class="pane__ext">rendering</span></div>
+              <div class="skel">
+                <span class="skel__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span class="vh">Generating CV preview</span>
+                <span class="skel__ln" style="width:62%"></span>
+                <span class="skel__ln" style="width:92%"></span>
+                <span class="skel__ln" style="width:78%"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="gates" role="group" aria-label="Approval gates for Zasta Karriere">
+            <div class="gate" data-state="active">
+              <span class="gate__idx mono" aria-hidden="true">01</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">CV</span>
+                <span class="gate__note">Rendering · gate opens when the preview lands</span>
+              </span>
+              <button class="gate__act" aria-label="Mark CV as approved for Zasta Karriere">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+                Mark ok
+              </button>
+            </div>
+
+            <div class="gate" data-state="locked" aria-disabled="true">
+              <span class="gate__idx mono" aria-hidden="true">02</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">Anschreiben</span>
+                <span class="gate__note">Locked · waiting on gate 01</span>
+              </span>
+              <span class="gate__hint">locked</span>
+            </div>
+
+            <div class="gate" data-state="locked" aria-disabled="true">
+              <span class="gate__idx mono" aria-hidden="true">03</span>
+              <svg class="gate__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>
+              <span class="gate__txt">
+                <span class="gate__label">Motivation</span>
+                <span class="gate__note">Locked · waiting on gate 02</span>
+              </span>
+              <span class="gate__hint">locked</span>
+            </div>
+          </div>
+
+          <div class="approve-row">
+            <span class="tip">
+              <button class="approve" aria-disabled="true" aria-describedby="tip-zasta" aria-label="Approve and submit Zasta Karriere. Disabled until CV, Anschreiben and Motivation are all approved.">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>
+                Approve &amp; Submit
+              </button>
+              <span class="tip__b" role="tooltip" id="tip-zasta">DPX: complete all 3 gates first</span>
+            </span>
+            <p class="approve-note">0 of 3 gates approved.</p>
+          </div>
+        </article>
+
+      </div>
+
+      <!-- ── state reference ────────────────────────────────────────────── -->
+      <section class="ref" data-od-id="state-reference">
+        <p class="eyebrow"><span class="eyebrow__bar" aria-hidden="true"></span><span class="eyebrow__txt">State reference.</span></p>
+        <div class="ref__grid">
+
+          <div class="ref__box">
+            <p class="ref__t">Gate progression rule</p>
+            <ul class="rules">
+              <li><span class="mono">01 → 02</span><span>Gate 02 unlocks only when gate 01 is <b>✓</b>.</span></li>
+              <li><span class="mono">02 → 03</span><span>Gate 03 unlocks only when gate 02 is <b>✓</b>.</span></li>
+              <li><span class="mono">03 → 04</span><span>Approve is live only when all three gates are <b>✓</b>.</span></li>
+              <li><span class="mono">uncheck</span><span>Rolling a gate back re-locks every gate after it.</span></li>
+            </ul>
+          </div>
+
+          <div class="ref__box">
+            <p class="ref__t">Empty state</p>
+            <div class="empty">
+              <p class="empty__t">No assignments in review.</p>
+              <p class="empty__s">The scraper runs at 09:00 Berlin. New cards land here with gate 01 open.</p>
+              <button class="btn-ghost" aria-label="Open the run log">Open run log</button>
+            </div>
+          </div>
+
+          <div class="ref__box">
+            <p class="ref__t">Rendering + disabled hint</p>
+            <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px;">Gate 01 stays pending until the CV preview finishes. Hover or focus the dark button for the blocking reason.</p>
+            <div style="margin-bottom:14px;">
+              <span class="skel__dots" aria-hidden="true" style="margin-bottom:10px;"><i></i><i></i><i></i></span>
+              <span class="skel__ln" style="display:block;width:88%"></span>
+              <span class="skel__ln" style="display:block;width:70%;margin-top:7px"></span>
+            </div>
+            <span class="tip">
+              <button class="approve" aria-disabled="true" aria-describedby="tip-ref" aria-label="Example disabled approve button">Approve &amp; Submit</button>
+              <span class="tip__b" role="tooltip" id="tip-ref">DPX: complete all 3 gates first</span>
+            </span>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+</body>
+</html>
