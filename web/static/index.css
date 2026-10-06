@@ -522,11 +522,12 @@ h4 { font-size: 1rem; }
 [data-version="3-4gate"] .card[data-state="approved"] { opacity: 0.65; }
 [data-version="3-4gate"] .card[data-state="skipped"] { opacity: 0.45; filter: saturate(0.4); }
 
-/* Approved/skipped cards glide to the bottom of the grid after the decision. */
+/* Approved/skipped cards glide to the bottom of the grid after the decision.
+   Only transform animates here — opacity is left to the data-state rules so the
+   move can't fight the approved/skipped fade and snap it back at the end. */
 [data-version="3-4gate"] .card.is-moving {
-  opacity: 0.25;
   transform: translateY(6px) scale(0.985);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  transition: transform 0.4s ease, opacity 0.4s ease;
 }
 
 /* ---------- 4-gate strip ---------- */
@@ -708,6 +709,8 @@ h4 { font-size: 1rem; }
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }
+/* HTML hidden attribute must beat the .cards{display:grid} specificity */
+[data-version="3-4gate"] [hidden] { display: none !important; }
 @keyframes skeleton-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
