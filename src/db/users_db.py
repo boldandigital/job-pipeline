@@ -33,6 +33,9 @@ from typing import Any, Optional
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 USERS_DB = PROJECT_ROOT / "data" / "users.db"
 
+# Bootstrap admin (matches jobs_db.ADMIN_USER_ID) — never demoted.
+ADMIN_USER_ID = "lars"
+
 # Tuning
 VERIFY_CODE_TTL = timedelta(minutes=30)
 RESET_TOKEN_TTL = timedelta(hours=1)
@@ -337,6 +340,29 @@ def update_password(uid: str, new_hash: str) -> None:
         conn.execute(
             "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
             (new_hash, _now_iso(), uid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_plan(uid: str, plan: str) -> None:
+    """Update a user's plan tier. Phase 1.4: written by Stripe webhooks.
+
+    The bootstrap admin user ("lars") is never downgraded by this helper —
+    callers in the Stripe event handler already check, but we belt-and-
+    brace it here too so a stray write cannot accidentally strip admin.
+    """
+    if plan not in ("free", "solo", "pro", "admin"):
+        raise ValueError(f"unknown plan tier: {plan!r}")
+    if uid == ADMIN_USER_ID:
+        # Never mutate the bootstrap admin's plan via this path.
+        return
+    conn = connect_users_db()
+    try:
+        conn.execute(
+            "UPDATE users SET plan = ?, updated_at = ? WHERE id = ?",
+            (plan, _now_iso(), uid),
         )
         conn.commit()
     finally:
