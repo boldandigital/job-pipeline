@@ -837,3 +837,4 @@ career_discovery:
   respect_robots_txt: true     # fail-open: only definite Disallow blocks us
   cache_ttl_days: 30           # how long to remember a probed company
   jobspy_db_path: "./data/jobspy.db"  # path to JobSpy SQLite for Layer 1
+

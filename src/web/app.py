@@ -1167,6 +1167,12 @@ def serve_batch_file(request: Request, path: str):
 from . import xing_apply as _xing_apply
 app.include_router(_xing_apply.router)
 
+# Phase 1.8 — credential manager endpoints. Deferred here to avoid the
+# circular import that would happen if auth_credentials tried to import
+# `_check_auth` from this module at the top.
+from . import auth_credentials as _auth_credentials  # noqa: E402
+app.include_router(_auth_credentials.router)
+
 
 # ---------------------------------------------------------------------------
 # Health
