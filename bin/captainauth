@@ -1,0 +1,492 @@
+#!/usr/bin/env python3
+"""
+captainauth — manage CaptainApply's stored job-board logins.
+
+Everything lives on this machine, encrypted at rest. This CLI is the only
+supported way to put a credential INTO the store, so it takes care never to
+echo a secret back: `show` prints fingerprints, not values, and passwords
+are read from a TTY (or stdin) rather than argv, so they stay out of shell
+history and out of `ps`.
+
+Usage:
+  captainauth init [USER_ID]
+  captainauth platforms
+  captainauth set PLATFORM USER_ID [--cookie-file F | --username U --password-stdin | --password]
+  captainauth show [USER_ID] [--json]
+  captainauth login USER_ID --platform P [--timeout N] [--force]
+  captainauth delete USER_ID [--platform P]
+  captainauth rotate USER_ID [--platform P]
+  captainauth rotate-master [--provider keychain|keyfile|passphrase]
+  captainauth export USER_ID --to FILE
+
+Run `captainauth <cmd> --help` for per-command flags.
+"""
+from __future__ import annotations
+
+import argparse
+import getpass
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+# Allow running straight from a clone without installing.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Two layers, two imports:
+#   - src.auth.credentials  : the crypto vault (per-user AES-GCM)
+#   - src.auth_credentials  : the spec-shaped façade (save/load/list_platforms)
+from src.auth.credentials import (  # noqa: E402
+    CredentialStore,
+    CredentialsError,
+    auth_file_path,
+    redact,
+)
+from src.auth_credentials import (  # noqa: E402
+    PlatformNotSupported,
+    UnknownPlatform,
+    delete as fa_delete,
+    save as fa_save,
+)
+from src.auth.platforms import (  # noqa: E402
+    get_platform,
+    public_platforms,
+)
+
+OK = "✓"
+WARN = "!"
+BAD = "✗"
+
+
+def _err(msg: str) -> None:
+    print(f"{BAD} {msg}", file=sys.stderr)
+
+
+def _ok(msg: str) -> None:
+    print(f"{OK} {msg}")
+
+
+def _note(msg: str) -> None:
+    print(f"  {msg}")
+
+
+def _store(args: argparse.Namespace) -> CredentialStore:
+    path = Path(args.auth_file).expanduser() if getattr(args, "auth_file", None) else None
+    provider = getattr(args, "key_provider", None)
+    return CredentialStore(path=path, key_provider=provider)
+
+
+def _read_password(allow_stdin: bool) -> str:
+    """Read a password without ever putting it in argv or shell history."""
+    if allow_stdin:
+        data = sys.stdin.read()
+        if not data.strip():
+            _err("no password on stdin")
+            raise SystemExit(2)
+        return data.rstrip("\n")
+    if not sys.stdin.isatty():
+        # Piped but not --password-stdin: refuse rather than echo.
+        _err("stdin is not a TTY — use --password-stdin to read a piped password")
+        raise SystemExit(2)
+    return getpass.getpass("  password: ")
+
+
+def _load_cookie_file(path_str: str) -> List[Dict[str, Any]]:
+    """Read cookies from a JSON file (Playwright, EditThisCookie, etc.)."""
+    path = Path(path_str).expanduser()
+    if not path.exists():
+        _err(f"cookie file not found: {path}")
+        raise SystemExit(2)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        _err(f"{path} is not valid JSON (line {exc.lineno})")
+        raise SystemExit(2)
+    if isinstance(data, dict):
+        # Some exports wrap the jar: {"cookies": [...]}
+        data = data.get("cookies", [])
+    if not isinstance(data, list):
+        _err(f"{path} must contain a JSON array of cookie objects")
+        raise SystemExit(2)
+    return [c for c in data if isinstance(c, dict)]
+
+
+def _print_table(rows: List[List[str]], headers: List[str]) -> None:
+    if not rows:
+        return
+    widths = [len(h) for h in headers]
+    for r in rows:
+        for i, cell in enumerate(r):
+            widths[i] = max(widths[i], len(str(cell)))
+    line = "  " + "  ".join(h.ljust(widths[i]) for i, h in enumerate(headers))
+    print(line)
+    print("  " + "  ".join("─" * w for w in widths))
+    for r in rows:
+        print("  " + "  ".join(str(c).ljust(widths[i]) for i, c in enumerate(r)))
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+def cmd_init(args: argparse.Namespace) -> int:
+    store = _store(args)
+    user_id = args.user_id or os.getenv("LARS_USER_ID") or "lars"
+    result = store.init_user(user_id)
+    _ok(f"credential profile for '{user_id}' "
+        f"{'created' if result['created'] else 'already exists'}")
+    _note(f"envelope: {result['path']}")
+    _note(f"key strategy: {store.key_provider_name}")
+    if store.key_provider_name == "keyfile":
+        _note(f"{WARN} no OS keychain found — the master key sits beside the "
+              f"envelope (mode 0600).")
+        _note("  install `keyring` to move it into the macOS Keychain.")
+    return 0
+
+
+def cmd_platforms(args: argparse.Namespace) -> int:
+    specs = public_platforms()
+    if args.json:
+        print(json.dumps(specs, indent=2))
+        return 0
+    rows = [
+        [s["name"],
+         "yes" if s["auth_required"] else "no",
+         s["preferred_method"],
+         ", ".join(s["supported_methods"]) or "—"]
+        for s in specs
+    ]
+    _print_table(rows, ["PLATFORM", "LOGIN?", "PREFERRED", "SUPPORTED"])
+    print()
+    for s in specs:
+        if s["note"]:
+            flag = f"  {WARN} " if s["warn"] else "  · "
+            _note(f"{flag}{s['name']}: {s['note']}")
+    return 0
+
+
+def cmd_set(args: argparse.Namespace) -> int:
+    spec = get_platform(args.platform)
+    if not spec.auth_required:
+        _err(f"'{spec.name}' needs no login — {spec.note}")
+        return 2
+
+    cookies: List[Dict[str, Any]] = []
+    if args.cookie_file:
+        cookies = _load_cookie_file(args.cookie_file)
+    elif args.username:
+        # Password path: use the lower layer directly so we can set
+        # method='password' (the façade is cookies-only by design).
+        password = _read_password(args.password_stdin)
+        try:
+            store = _store(args)
+            cred = store.put(
+                args.user_id, args.platform,
+                username=args.username, password=password, method="password",
+                notes=args.notes or "",
+            )
+        except (PlatformNotSupported, CredentialsError) as exc:
+            _err(str(exc))
+            return 2
+        _ok(f"stored {spec.name} credential for '{args.user_id}' "
+            f"(method=password, fingerprint={cred.fingerprint})")
+        _note(f"encrypted at {store.path} ({store.key_provider_name} strategy)")
+        if spec.warn:
+            _note(f"{WARN} {spec.note}")
+        return 0
+    else:
+        _err("supply either --cookie-file, or --username (with --password-stdin)")
+        _note(f"recommended for {spec.name}: bin/captainauth login {args.user_id} "
+              f"--platform {spec.name}")
+        return 2
+
+    if not cookies:
+        _err(f"cookie file '{args.cookie_file}' contained no usable cookies")
+        return 2
+
+    try:
+        stored = fa_save(args.user_id, args.platform, cookies)
+    except PlatformNotSupported as exc:
+        _err(str(exc))
+        return 2
+    except CredentialsError as exc:
+        _err(str(exc))
+        return 1
+
+    _ok(f"stored {spec.name} credential for '{args.user_id}' "
+        f"({len(stored.cookies)} cookie(s))")
+    store = _store(args)
+    _note(f"encrypted at {store.path} ({store.key_provider_name} strategy)")
+    return 0
+
+
+def cmd_show(args: argparse.Namespace) -> int:
+    user_id = args.user_id or os.getenv("LARS_USER_ID") or "lars"
+
+    if not args.json and not user_id:
+        store = _store(args)
+        users = store.list_users()
+        if not users:
+            _note("no credential profiles yet — run `captainauth init`")
+            return 0
+        _print_table([[u] for u in users], ["USER ID"])
+        return 0
+
+    store = _store(args)
+    try:
+        status = store.status(user_id)
+    except CredentialsError as exc:
+        _err(str(exc))
+        return 1
+
+    if args.json:
+        print(json.dumps(status, indent=2))
+        return 0
+
+    if not status["profile_exists"]:
+        _note(f"no credential profile for '{user_id}' — run "
+              f"`captainauth init {user_id}`")
+        return 0
+    if not status["readable"]:
+        _err(f"profile for '{user_id}' could not be decrypted — the master key "
+             f"does not match. Nothing was changed.")
+        return 1
+
+    _ok(f"credential profile '{user_id}'  ({status['platform_count']} stored)")
+    _note(f"envelope:  {status['path']}")
+    _note(f"key:       {status['key_provider']}")
+    print()
+    if status["platforms"]:
+        rows = []
+        for p in status["platforms"]:
+            detail = []
+            if p["has_cookies"]:
+                detail.append(f"{p['cookie_count']} cookies")
+            if p["has_password"]:
+                detail.append("username+password")
+            if p["last_used_at"]:
+                detail.append(f"used {p['last_used_at'][:10]}")
+            rows.append([
+                p["platform"], p["method"], p["fingerprint"],
+                ", ".join(detail) or "—",
+            ])
+        _print_table(rows, ["PLATFORM", "METHOD", "FINGERPRINT", "DETAIL"])
+    else:
+        _note("no platform credentials stored yet")
+    print()
+    _note(f"needs a login:   {', '.join(status['platforms_needing_auth'])}")
+    _note(f"no login needed: {', '.join(status['platforms_not_needing_auth'])}")
+    print()
+    _note("no password or cookie value is ever printed — the fingerprint is a "
+          "one-way digest")
+    return 0
+
+
+def cmd_login(args: argparse.Namespace) -> int:
+    from src.auth.capture import CaptureError, capture_session
+
+    store = _store(args)
+    store.init_user(args.user_id)  # no-op if it exists
+    try:
+        result = capture_session(
+            args.platform, args.user_id,
+            timeout=args.timeout, headless=args.headless,
+            force=args.force, store=store, browser_path=args.browser_path,
+        )
+    except CaptureError as exc:
+        _err(str(exc))
+        return 1
+    except (CredentialsError, UnknownPlatform) as exc:
+        _err(str(exc))
+        return 2
+
+    s = result.summary()
+    _ok(f"captured {s['cookie_count']} cookie(s) for {s['platform']} "
+        f"in {s['elapsed_s']}s")
+    _note(f"domains: {', '.join(s['domains'])}")
+    _ok(f"stored encrypted at {store.path} ({store.key_provider_name} strategy)")
+    return 0
+
+
+def cmd_delete(args: argparse.Namespace) -> int:
+    if not args.platform:
+        _err("specify --platform PLATFORM to delete (the whole-profile "
+             "wipe lives in a future task)")
+        return 2
+    deleted = fa_delete(args.user_id, args.platform)
+    if not deleted:
+        _err(f"no {args.platform} credential to delete for '{args.user_id}'")
+        return 1
+    _ok(f"deleted {args.platform} credential for '{args.user_id}'")
+    store = _store(args)
+    _note(f"envelope: {store.path}")
+    return 0
+
+
+def cmd_rotate(args: argparse.Namespace) -> int:
+    store = _store(args)
+    if args.platform:
+        # Platform-level rotation = replace the stored credential.
+        if args.cookie_file:
+            cookies = _load_cookie_file(args.cookie_file)
+            try:
+                stored = fa_save(args.user_id, args.platform, cookies)
+            except (PlatformNotSupported, CredentialsError) as exc:
+                _err(str(exc))
+                return 1
+            _ok(f"rotated {stored.platform} credential for '{args.user_id}' "
+                f"({len(stored.cookies)} cookies)")
+            return 0
+        if args.username:
+            password = _read_password(args.password_stdin)
+            try:
+                cred = store.rotate_platform_credential(
+                    args.user_id, args.platform,
+                    username=args.username, password=password, method="password",
+                )
+            except (PlatformNotSupported, CredentialsError) as exc:
+                _err(str(exc))
+                return 1
+            _ok(f"rotated {cred.platform} credential for '{args.user_id}' "
+                f"(fingerprint={cred.fingerprint})")
+            return 0
+        _err("rotation needs --cookie-file or --username")
+        return 2
+
+    # Master-key rotation: re-wrap every user under a fresh key.
+    if not args.yes:
+        try:
+            confirm = input(
+                f"  Rotate the master key for ALL users in {store.path}? [y/N] "
+            ).strip().lower() in ("y", "yes")
+        except EOFError:
+            confirm = False
+        if not confirm:
+            _note("aborted — nothing changed")
+            return 1
+    try:
+        result = store.rotate_master_key(args.provider)
+    except CredentialsError as exc:
+        _err(str(exc))
+        return 1
+    _ok(f"rotated the master key for {result['users']} profile(s)")
+    _note(f"strategy now: {result['key_provider']}")
+    return 0
+
+
+def cmd_export(args: argparse.Namespace) -> int:
+    store = _store(args)
+    out = Path(args.to).expanduser()
+    if out.exists() and not args.force:
+        _err(f"{out} already exists — pass --force to overwrite")
+        return 2
+    try:
+        plaintext = store.export_plaintext(args.user_id)
+    except (NoSuchUserError, CredentialsError) as exc:
+        _err(str(exc))
+        return 1
+    fd = os.open(str(out), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(plaintext)
+    _ok(f"exported '{args.user_id}' to {out}")
+    _note(f"{WARN} that file is PLAINTEXT — delete it once you have what you need")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Parser
+# ---------------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="captainauth",
+        description="Manage encrypted job-board logins for CaptainApply.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Credentials never leave this machine and are never printed back.\n"
+            "Preferred flow:  captainauth login <user> --platform xing\n"
+        ),
+    )
+    p.add_argument("--auth-file", help="override the auth.json path")
+    p.add_argument(
+        "--key-provider", choices=["keychain", "keyfile", "passphrase"],
+        help="force a master-key strategy (default: auto-detect)",
+    )
+    sub = p.add_subparsers(dest="command", required=True)
+
+    sp = sub.add_parser("init", help="create a credential profile for a user")
+    sp.add_argument("user_id", nargs="?", help="defaults to $LARS_USER_ID or 'lars'")
+    sp.set_defaults(func=cmd_init)
+
+    sp = sub.add_parser("platforms", help="list platforms and their auth needs")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=cmd_platforms)
+
+    sp = sub.add_parser("set", help="store a credential from a file or prompt")
+    sp.add_argument("platform")
+    sp.add_argument("user_id")
+    sp.add_argument("--cookie-file", help="JSON cookie-jar export")
+    sp.add_argument("--username")
+    sp.add_argument("--password-stdin", action="store_true",
+                    help="read the password from stdin instead of a TTY")
+    sp.add_argument("--notes", default="")
+    sp.set_defaults(func=cmd_set)
+
+    sp = sub.add_parser("show", help="list stored accounts (never their secrets)")
+    sp.add_argument("user_id", nargs="?")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=cmd_show)
+
+    sp = sub.add_parser("login", help="open a browser and capture a real session")
+    sp.add_argument("user_id")
+    sp.add_argument("--platform", required=True)
+    sp.add_argument("--timeout", type=int, default=300,
+                    help="seconds to wait for the human login (default 300)")
+    sp.add_argument("--headless", action="store_true",
+                    help="not supported for interactive login; fails fast")
+    sp.add_argument("--force", action="store_true",
+                    help="capture cookies even if no sign-in is detected")
+    sp.add_argument("--browser-path", help="explicit Chromium executable")
+    sp.set_defaults(func=cmd_login)
+
+    sp = sub.add_parser("delete", help="remove a credential or a whole profile")
+    sp.add_argument("user_id")
+    sp.add_argument("--platform")
+    sp.set_defaults(func=cmd_delete)
+
+    sp = sub.add_parser("rotate", help="replace a credential, or rotate the master key")
+    sp.add_argument("user_id", nargs="?")
+    sp.add_argument("--platform", help="rotate just this platform's credential")
+    sp.add_argument("--cookie-file")
+    sp.add_argument("--username")
+    sp.add_argument("--password-stdin", action="store_true")
+    sp.add_argument("--provider", choices=["keychain", "keyfile", "passphrase"],
+                    help="master-key rotation target (default: current)")
+    sp.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    sp.set_defaults(func=cmd_rotate)
+
+    sp = sub.add_parser("export", help="write a PLAINTEXT backup (handle with care)")
+    sp.add_argument("user_id")
+    sp.add_argument("--to", required=True, help="destination file")
+    sp.add_argument("--force", action="store_true", help="overwrite an existing file")
+    sp.set_defaults(func=cmd_export)
+
+    return p
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return args.func(args)
+    except KeyboardInterrupt:
+        _note("\naborted")
+        return 130
+    except (CredentialsError, UnknownPlatform) as exc:
+        _err(str(exc))
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
