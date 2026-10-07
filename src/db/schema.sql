@@ -94,8 +94,15 @@ CREATE TABLE IF NOT EXISTS jobs (
     --   cv_version:    CV identifier submitted ("v3-hosting-cto-2026-09-25").
     --                  Joined back to master/templates/* on the apply side;
     --                  optional — NULL until the apply pipeline stamps it.
+    --   applied_channel: which submit path fired — 'api' (Greenhouse/Lever/Ashby
+    --                   HTTP POST) or 'browser' (XING/LinkedIn/Indeed/Workday
+    --                   Playwright fill that paused for human submit). Written
+    --                   by src/apply/orchestrator.py on success. The companion
+    --                   migration scripts/migrate_schema_add_applied_channel.py
+    --                   ALTERs this onto pre-existing DBs.
     salary_range        TEXT,
     cv_version          TEXT,
+    applied_channel     TEXT,
 
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

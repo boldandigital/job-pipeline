@@ -18,3 +18,19 @@
 #   tail -n 200 /Users/lars/Documents/Projects/job-pipeline/logs/lars-daily-$(date +%Y%m%d).log
 # To remove (pause indefinitely):
 #   crontab -e   →  delete the line above
+
+
+# === Apply orchestrator: submit the approved queue ===
+#
+# Scans status='approved' AND applied_at IS NULL and routes each job to its
+# channel (Greenhouse/Lever/Ashby API when an employer key is configured;
+# XING/LinkedIn/Indeed/Workday via a real browser that PAUSES so you click
+# Submit yourself). Capped at 20 submissions/user/day. Exits 2 when there is
+# nothing to do — that is normal, not an error worth alerting on.
+0 9 * * * cd /Users/lars/Documents/Projects/job-pipeline && .venv/bin/python bin/apply-runner.py --all-pending >> logs/apply.log 2>&1
+
+# Preview without touching anything (safe any time):
+#   .venv/bin/python bin/apply-runner.py --all-pending --dry-run
+
+# Apply one specific approved job by hand:
+#   .venv/bin/python bin/apply-runner.py --job-id 79
