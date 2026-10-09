@@ -468,8 +468,14 @@
 
     function refreshStats() {
       const awaiting = jobsCache.filter(j => j.status === 'new').length;
-      const ready = jobsCache.filter(j => j.cv_ok && j.anschreiben_ok && j.motivation_ok && j.status !== 'approved').length;
-      const submitted = jobsCache.filter(j => j.status === 'approved').length;
+      // "Ready to submit" = all 3 gates ✓ AND not yet sent. An approved
+      // job whose status is 'approved' (gate flow ended) is ALSO ready.
+      // The previous logic wrongly excluded 'approved', so 0-of-3 cards
+      // were double-counted as "not ready" even when they were.
+      const ready = jobsCache.filter(j =>
+        j.cv_ok && j.anschreiben_ok && j.motivation_ok && j.status !== 'applied'
+      ).length;
+      const submitted = jobsCache.filter(j => j.status === 'applied').length;
       const skipped = jobsCache.filter(j => j.status === 'skipped').length;
       document.getElementById('stat-awaiting').textContent = awaiting;
       document.getElementById('stat-ready').textContent = ready;

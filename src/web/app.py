@@ -198,6 +198,22 @@ def _connect(request: Request = None) -> sqlite3.Connection:
         # Apply schema if missing (e.g. fresh test fixture)
         from src.db.jobs_db import _USER_JOBS_SCHEMA
         conn.executescript(_USER_JOBS_SCHEMA)
+        # Same gated migrations as connect_user_db — the 4-gate system
+        # needs cv_ok / anschreiben_ok / motivation_ok / approved_at even
+        # on a fresh test fixture, otherwise the approve endpoint will
+        # raise "no such column: cv_ok" mid-update.
+        existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+        for col, ddl in (
+            ("cv_ok", "ALTER TABLE jobs ADD COLUMN cv_ok INTEGER DEFAULT 0"),
+            ("anschreiben_ok", "ALTER TABLE jobs ADD COLUMN anschreiben_ok INTEGER DEFAULT 0"),
+            ("motivation_ok", "ALTER TABLE jobs ADD COLUMN motivation_ok INTEGER DEFAULT 0"),
+            ("approved_at", "ALTER TABLE jobs ADD COLUMN approved_at TEXT"),
+        ):
+            if col not in existing_cols:
+                try:
+                    conn.execute(ddl)
+                except Exception:
+                    pass
         conn.commit()
         return conn
 
@@ -1004,8 +1020,30 @@ def approve_job(request: Request, job_id: int, body: ApproveRequest | None = Non
     _require_auth(request)
     job = _fetch_one_job(request, job_id)
     _update_status(request, job_id, "approved")
+    # 4-gate: approving marks all 3 progress gates ✓ and records the
+    # timestamp. Without this the dashboard would still show "0 of 3
+    # gates approved" for an approved card. The server is authoritative;
+    # the dashboard's per-card gate buttons stay visible for re-review.
+    _set_all_gates(request, job_id, value=True)
     _discord_notify("approved", job)
     return {"ok": True, "id": job_id, "status": "approved"}
+
+
+def _set_all_gates(request: Request, job_id: int, value: bool) -> None:
+    """Mark/unmark all 3 progress gates on a job in one SQL write."""
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).isoformat()
+    conn = _connect(request)
+    try:
+        conn.execute(
+            "UPDATE jobs SET cv_ok=?, anschreiben_ok=?, motivation_ok=?, "
+            "approved_at=CASE WHEN ?=1 THEN COALESCE(approved_at, ?) ELSE approved_at END, "
+            "updated_at=? WHERE id=?",
+            (int(value), int(value), int(value), int(value), now_iso, now_iso, job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 @app.post("/api/jobs/{job_id}/skip")
