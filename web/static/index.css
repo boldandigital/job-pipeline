@@ -512,6 +512,57 @@ h4 { font-size: 1rem; }
 [data-version="3-4gate"] .chip--source[data-source="arbeitsagentur"] { background: #F1F5F9; color: #0F172A; }
 [data-version="3-4gate"] .chip--source[data-source="indeed"]   { background: #1E40AF; color: #FFFFFF; }
 
+/* ============================================================
+   v3.7 — per-card profile picker (Phase 2.7)
+   The .chip--profile looks like a chip but acts like a button;
+   clicking it opens a small dropdown anchored to the chip.
+   Only one dropdown can be open at a time.
+   ============================================================ */
+[data-version="3-4gate"] .chip--profile {
+  display: inline-flex; align-items: center; gap: 5px;
+  cursor: pointer; user-select: none;
+  background: #E0E7FF; color: #3730A3;
+  border: 1px solid #C7D2FE;
+  font-family: var(--font-sans, inherit);
+  font-size: 12px; font-weight: 500;
+  letter-spacing: 0; padding: 3px 8px;
+  position: relative;
+  transition: background 0.15s, border-color 0.15s;
+}
+[data-version="3-4gate"] .chip--profile:hover { background: #C7D2FE; border-color: #A5B4FC; }
+[data-version="3-4gate"] .chip--profile.is-open { background: #C7D2FE; border-color: #4F46E5; }
+[data-version="3-4gate"] .chip--profile__icon { font-size: 11px; opacity: 0.8; }
+[data-version="3-4gate"] .chip--profile__caret { font-size: 9px; margin-left: 2px; }
+[data-version="3-4gate"] .chip--profile__label {
+  max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+[data-version="3-4gate"] .profile-menu {
+  position: absolute; z-index: 200;
+  min-width: 220px; max-width: 280px;
+  background: #fff; border: 1px solid #E2E8F0; border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15,23,42,0.18);
+  padding: 6px; margin-top: 6px;
+  font-family: var(--font-sans, inherit);
+  font-size: 13px;
+  /* The menu is positioned by JS; it lives inside .card so absolute is
+     relative to the card. We bump it below the chip by JS. */
+  left: 0; top: calc(100% - 4px);
+}
+[data-version="3-4gate"] .profile-menu__item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 6px; cursor: pointer;
+  color: #0F172A;
+}
+[data-version="3-4gate"] .profile-menu__item:hover { background: #F1F5F9; }
+[data-version="3-4gate"] .profile-menu__item.is-active { background: #EEF2FF; color: #3730A3; }
+[data-version="3-4gate"] .profile-menu__name { flex: 1; font-weight: 500; word-break: break-word; }
+[data-version="3-4gate"] .profile-menu__check { color: #4F46E5; font-weight: 700; }
+[data-version="3-4gate"] .profile-menu__hint {
+  padding: 6px 10px; color: #94A3B8; font-size: 12px; border-top: 1px solid #F1F5F9;
+  margin-top: 4px;
+}
+
 [data-version="3-4gate"] .card__id-num {
   font-family: var(--font-mono);
   font-size: 11px;

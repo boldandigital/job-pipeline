@@ -20,6 +20,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 # ============================================================================
 # CONFIGURATION — load real profile from config/lars-cv-data.json
@@ -41,6 +42,99 @@ def _load_cv_data() -> dict:
             "location": os.getenv("CANDIDATE_LOCATION", "Aarschot, Flemish Region, Belgium"),
         }
     }
+
+
+def _load_profile_override(user_id: str, profile_id: str) -> dict:
+    """Phase 2.7: build a CV_DATA-shaped dict from a profile row.
+
+    The shape mirrors ``config/lars-cv-data.json`` so the existing
+    rendering code (PERSONAL, SKILLS, EXPERIENCE, LANGUAGES, …) keeps
+    working without touching it. ``headline`` and ``summary`` are
+    mapped onto the legacy ``title_en`` / ``summary_en`` keys.
+    """
+    from src.db import profiles_db as _profiles_db
+    profile = _profiles_db.get_profile(user_id, profile_id)
+    if profile is None:
+        return {}
+    # Pull name + email + location from the user row when present.
+    personal: dict[str, Any] = {
+        "name": "",
+        "email": "",
+        "phone": "",
+        "location": "",
+    }
+    if user_id:
+        try:
+            from src.db import users_db as _users_db
+            row = _users_db.get_user_by_id(user_id)
+            if row is not None:
+                personal["name"] = row["name"] or personal["name"]
+                personal["email"] = row["email"] or personal["email"]
+        except Exception:
+            pass
+    # Links → flat linkedin / github / websites.
+    for link in profile.get("links") or []:
+        kind = (link.get("kind") or "").lower()
+        url = link.get("url") or ""
+        if kind == "linkedin":
+            personal["linkedin"] = url
+        elif kind == "github":
+            personal["github"] = url
+        elif kind in ("portfolio", "other"):
+            # CV personal has a `websites` list; append rather than replace.
+            sites = list(personal.get("websites") or [])
+            if url and url not in sites:
+                sites.append(url)
+            personal["websites"] = sites
+
+    # Experience profile rows use {company, role, start, end, bullets};
+    # lars-cv-data.json uses {period, role_en, bullets_en}. Map between
+    # them so the rendering code can iterate the same shape.
+    experience: list[dict[str, Any]] = []
+    for entry in profile.get("experience") or []:
+        period = " → ".join(
+            x for x in (entry.get("start", ""), entry.get("end", "")) if x
+        )
+        experience.append({
+            "period": period,
+            "company": entry.get("company", ""),
+            "title_en": entry.get("company", ""),
+            "title_de": entry.get("company", ""),
+            "role_en": entry.get("role", ""),
+            "role_de": entry.get("role", ""),
+            "bullets_en": entry.get("bullets", []) or [],
+            "bullets_de": entry.get("bullets", []) or [],
+        })
+
+    return {
+        "personal": personal,
+        "title_en": profile.get("headline", ""),
+        "title_de": profile.get("headline", ""),
+        "summary_en": profile.get("summary", ""),
+        "summary_de": profile.get("summary", ""),
+        "experience": experience,
+        "skills": {"en": profile.get("skills") or []},
+        "languages": [],
+        "certifications": [],
+    }
+
+
+def _apply_profile_data(data: dict) -> None:
+    """Patch the module-level CV_DATA / PERSONAL / SKILLS globals."""
+    global CV_DATA, PERSONAL, SKILLS, EXPERIENCE, LANGUAGES
+    CV_DATA = data
+    PERSONAL = CV_DATA.get("personal", PERSONAL)
+    raw_skills = CV_DATA.get("skills", {})
+    if isinstance(raw_skills, dict):
+        SKILLS = {
+            "en": list(raw_skills.get("en") or []),
+            "de": list(raw_skills.get("de") or raw_skills.get("en") or []),
+        }
+    else:
+        SKILLS = {"en": list(raw_skills or [])}
+    EXPERIENCE = CV_DATA.get("experience", EXPERIENCE)
+    LANGUAGES = CV_DATA.get("languages", LANGUAGES)
+
 
 CV_DATA = _load_cv_data()
 PERSONAL = CV_DATA["personal"]
@@ -312,10 +406,36 @@ def main():
     parser.add_argument("--order", default="summary,experience,education,certifications,skills",
                         help="Section order (comma-separated)")
     parser.add_argument("--output", default=None, help="Output PDF path")
+    # Phase 2.7: optional profile override. When --profile-id is set,
+    # the CV renders from that profile row instead of the global
+    # config/lars-cv-data.json. --user-id defaults to the bootstrap
+    # admin when not provided.
+    parser.add_argument("--user-id", default=os.getenv("LARS_USER_ID", "lars"),
+                        help="Owner of the profile (defaults to admin/LARS_USER_ID)")
+    parser.add_argument("--profile-id", default=None,
+                        help="Phase 2.7: render from a specific profile row. "
+                             "Falls back to config/lars-cv-data.json when omitted.")
     args = parser.parse_args()
 
+    # Phase 2.7: when a profile-id is given, override the global CV_DATA
+    # with the profile's headline / summary / experience / skills /
+    # links before the HTML is built. Without --profile-id, behaviour
+    # is unchanged (the legacy global config drives everything).
+    if args.profile_id:
+        profile_data = _load_profile_override(args.user_id, args.profile_id)
+        if profile_data:
+            _apply_profile_data(profile_data)
+            # Also use the profile's headline as the tagline when the
+            # caller didn't pass --tagline explicitly.
+            if args.tagline == "AI & Automation Specialist":
+                default_headline = (
+                    (profile_data.get("title_en") or "").strip()
+                    or "AI & Automation Specialist"
+                )
+                args.tagline = default_headline
+
     order = [s.strip() for s in args.order.split(",")]
-    output = args.output or f"./output/CV_{PERSONAL['name'].replace(' ', '_')}_{args.company}.pdf"
+    output = args.output or f"./output/CV_{PERSONAL.get('name', 'candidate').replace(' ', '_')}_{args.company}.pdf"
 
     os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
     html = build_html(args.tagline, args.language, order)

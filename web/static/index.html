@@ -44,6 +44,10 @@
             Skipped
             <span class="nav-item__badge" id="nav-skipped-count">0</span>
           </a>
+          <a class="nav-item" href="/app/profiles" id="link-profiles" data-action="profiles">
+            <span class="nav-item__icon">◑</span>
+            Profiles
+          </a>
         </div>
         <div>
           <div class="nav-section__title">Pipeline</div>
@@ -198,6 +202,11 @@
       <div class="card__chips">
         <span class="chip chip--salary"></span>
         <span class="chip chip--source"></span>
+        <span class="chip chip--profile" data-role="profile" hidden>
+          <span class="chip--profile__icon">◑</span>
+          <span class="chip--profile__label"></span>
+          <span class="chip--profile__caret" aria-hidden="true">▾</span>
+        </span>
       </div>
 
       <!-- The 4-gate progressive approval strip -->
@@ -564,6 +573,11 @@ const STEPS = [
       chip.textContent = srcLabel;
       chip.setAttribute('data-source', (job.source || '').toLowerCase());
 
+      // Profile chip — Phase 2.7. Hidden until profiles are loaded.
+      article.querySelector('.chip--profile').setAttribute(
+        'data-job-id', String(job.id)
+      );
+
       // Apply existing gate state
       const state = {
           cv_ok: !!job.cv_ok,
@@ -893,6 +907,171 @@ const STEPS = [
         flashLog('card moved to the bottom of the list.');
       }, 420);
     }
+
+    // ============== PROFILE PICKER (Phase 2.7) ==============
+    // Each card gets a small chip in its .card__chips row. Clicking it opens
+    // a dropdown of the user's profiles (with the default pre-selected), and
+    // the chosen profile is persisted via PUT /api/jobs/{id}/profile.
+    //
+    // State lives in `profileState` (loaded once per session) and
+    // `jobProfileId` (Map<jobId, profileId|null>) so we know which row to
+    // flag as the active one when the menu opens.
+    const profileState = {
+      items: [],
+      defaultId: '',
+    };
+    const jobProfileId = new Map();   // jobId -> profileId | null (explicit clear)
+    let profilesLoaded = false;
+    let openMenu = null;              // reference to the currently-open .profile-menu
+
+    async function loadProfiles() {
+      try {
+        const payload = await fetchJSON('/api/profiles');
+        profileState.items = payload.items || [];
+        profileState.defaultId = payload.default_id || '';
+        profilesLoaded = true;
+        refreshAllProfileChips();
+      } catch (e) {
+        // Soft-fail: keep the chips hidden so the user can still approve.
+        console.warn('profiles load failed:', e);
+      }
+    }
+
+    function effectiveProfileId(job) {
+      // Priority: explicit per-job override → user's default → '' (no profile yet).
+      const jid = Number(job.id);
+      if (jobProfileId.has(jid)) return jobProfileId.get(jid) || '';
+      return (job && job.profile_id) || profileState.defaultId || '';
+    }
+
+    function refreshAllProfileChips() {
+      grid.querySelectorAll('.chip--profile').forEach(el => {
+        const jid = Number(el.getAttribute('data-job-id'));
+        const job = byId.get(jid);
+        if (!job || profileState.items.length === 0) {
+          el.hidden = true;
+          return;
+        }
+        const pid = effectiveProfileId(job);
+        const profile = profileState.items.find(p => p.id === pid)
+                     || profileState.items.find(p => p.id === profileState.defaultId);
+        if (!profile) {
+          el.hidden = true;
+          return;
+        }
+        el.hidden = false;
+        el.querySelector('.chip--profile__label').textContent = profile.name;
+        el.setAttribute('data-profile-id', profile.id);
+      });
+    }
+
+    function openProfileMenu(chipEl) {
+      // Close any open menu first
+      closeProfileMenu();
+      const jid = Number(chipEl.getAttribute('data-job-id'));
+      const job = byId.get(jid);
+      if (!job) return;
+      const menu = document.createElement('div');
+      menu.className = 'profile-menu';
+      menu.setAttribute('data-job-id', String(jid));
+      const currentId = effectiveProfileId(job);
+      const rows = profileState.items.map(p => {
+        const active = p.id === currentId;
+        return (
+          '<div class="profile-menu__item ' + (active ? 'is-active' : '') + '"' +
+          ' data-profile-id="' + escapeHTML(p.id) + '">' +
+          '<span class="profile-menu__name">' + escapeHTML(p.name) + '</span>' +
+          (active ? '<span class="profile-menu__check">✓</span>' : '') +
+          '</div>'
+        );
+      }).join('');
+      menu.innerHTML = rows +
+        '<div class="profile-menu__hint">Default is shown with a check.</div>';
+      chipEl.appendChild(menu);
+      chipEl.classList.add('is-open');
+      openMenu = menu;
+
+      // Wire row clicks
+      menu.querySelectorAll('.profile-menu__item').forEach(row => {
+        row.addEventListener('click', async (ev) => {
+          ev.stopPropagation();
+          const pid = row.getAttribute('data-profile-id');
+          await selectProfileForJob(jid, pid);
+          closeProfileMenu();
+        });
+      });
+    }
+
+    function closeProfileMenu() {
+      if (openMenu && openMenu.parentNode) openMenu.parentNode.removeChild(openMenu);
+      if (openMenu) {
+        const chip = openMenu.closest('.chip--profile');
+        if (chip) chip.classList.remove('is-open');
+      }
+      openMenu = null;
+    }
+
+    async function selectProfileForJob(jid, profileId) {
+      try {
+        const r = await postJSON(API.setProfile(jid), { profile_id: profileId || null });
+        jobProfileId.set(jid, r.profile_id || null);
+        const job = byId.get(jid);
+        if (job) job.profile_id = r.profile_id || '';
+        refreshAllProfileChips();
+        const profile = profileState.items.find(p => p.id === r.profile_id);
+        flashLog('job #' + jid + ' → ' + (profile ? profile.name : 'default profile'));
+      } catch (e) {
+        flashLog('profile set failed: ' + e.message);
+      }
+    }
+
+    // Click the chip → open menu. Click anywhere else → close.
+    document.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip--profile');
+      if (chip) {
+        e.stopPropagation();
+        // If this chip's menu is already open, close it
+        if (openMenu && openMenu.parentNode === chip) {
+          closeProfileMenu();
+        } else {
+          openProfileMenu(chip);
+        }
+        return;
+      }
+      if (openMenu && !e.target.closest('.profile-menu')) {
+        closeProfileMenu();
+      }
+    });
+    // Esc closes the menu
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && openMenu) closeProfileMenu();
+    });
+
+    // Extend the API helper with the set-profile endpoint
+    const API_PROFILES = '/api/profiles';
+    API.setProfile = function (jobId) {
+      return '/api/jobs/' + jobId + '/profile';
+    };
+
+    // Load profiles alongside jobs so the chips appear with the grid.
+    // We hook into the existing loadJobs() flow without touching its body.
+    const _origLoadJobs = loadJobs;
+    loadJobs = async function () {
+      document.getElementById('loading-state').hidden = false;
+      try {
+        const [jobs, stats] = await Promise.all([
+          fetchJSON(API.jobs + '?limit=50'),
+          fetchJSON(API.stats).catch(() => null),
+          loadProfiles(),
+        ]);
+        renderAll(dashboardJobs(jobs));
+        if (stats) updateSidebarCounters(stats);
+      } catch (e) {
+        console.error('loadJobs failed:', e);
+        document.getElementById('loading-state').innerHTML =
+          '<div class="empty-state"><div class="empty-state__icon">!</div><h2 class="empty-state__title">Couldn\'t reach the API.</h2><p class="empty-state__sub">' + escapeHTML(e.message) + '</p></div>';
+      }
+    };
 
     // ============== LOG TICKER ==============
     const logMsg = document.getElementById('log-msg');

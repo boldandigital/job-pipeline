@@ -79,13 +79,21 @@ app = FastAPI(title="Job Approval UI", version="1.0.0")
 
 @app.on_event("startup")
 def _ensure_users_schema() -> None:
-    """Phase 1.2: create data/users.db if missing. Idempotent."""
+    """Phase 1.2: create data/users.db if missing. Idempotent.
+    Phase 2.7: also seed the bootstrap admin's Default profile on first run.
+    """
     try:
         from src.db import users_db as _users_db
         _users_db.ensure_schema()
         log.info("users_db schema ready at %s", _users_db.USERS_DB)
     except Exception as exc:  # pragma: no cover — surface in logs only
         log.warning("could not init users_db: %s", exc)
+    try:
+        from src.db import profiles_db as _profiles_db
+        _profiles_db.ensure_admin_default()
+        log.info("admin default profile ready")
+    except Exception as exc:  # pragma: no cover
+        log.warning("could not seed admin default profile: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +219,7 @@ def _connect(request: Request = None) -> sqlite3.Connection:
             ("anschreiben_ok", "ALTER TABLE jobs ADD COLUMN anschreiben_ok INTEGER DEFAULT 0"),
             ("motivation_ok", "ALTER TABLE jobs ADD COLUMN motivation_ok INTEGER DEFAULT 0"),
             ("approved_at", "ALTER TABLE jobs ADD COLUMN approved_at TEXT"),
+            ("profile_id", "ALTER TABLE jobs ADD COLUMN profile_id TEXT"),
         ):
             if col not in existing_cols:
                 try:
@@ -276,6 +285,7 @@ def _row_to_job(row: sqlite3.Row, batches_dir: Path) -> Dict[str, Any]:
         "anschreiben_ok": bool(row["anschreiben_ok"]) if "anschreiben_ok" in row.keys() else False,
         "motivation_ok": bool(row["motivation_ok"]) if "motivation_ok" in row.keys() else False,
         "approved_at": (row["approved_at"] or "") if "approved_at" in row.keys() else "",
+        "profile_id": (row["profile_id"] or "") if "profile_id" in row.keys() else "",
         "created_at": row["created_at"] or "",
         "updated_at": row["updated_at"] or "",
     }
@@ -1258,6 +1268,7 @@ def api_me(request: Request):
 # ---------------------------------------------------------------------------
 
 from fastapi import File as _File, UploadFile as _UploadFile
+from fastapi import Form as _Form
 
 from src.db.users_db import (
     CV_ALLOWED_EXTS,
@@ -1557,6 +1568,356 @@ def api_onboarding_post(request: Request, body: OnboardingUpdate):
         "onboarding_step": step,
         "total_steps": TOUR_TOTAL_STEPS,
     }
+
+
+# ---------------------------------------------------------------------------
+# Phase 2.7 — multi-profile support
+# ---------------------------------------------------------------------------
+#
+# A user owns one or more *profiles* (a headline + summary + experience +
+# skills + links + a small set of CVs). The legacy /api/profile endpoints
+# still serve the is_default=1 row for backward compatibility; this block
+# adds the rest of the CRUD surface used by the new /app/profiles page and
+# the per-job profile picker.
+#
+# Admin behaviour:
+#   - First GET on /api/profiles auto-creates a "Default" profile from
+#     config/lars-cv-data.json so the admin's existing data is preserved.
+#   - The admin's CV/CL generators still fall back to the global config
+#     file when no --profile-id is given, so the existing scripts keep
+#     working without changes.
+#
+# CV uploads:
+#   - data/users/<user_id>/profiles/<profile_id>/cvs/<cv_id>.<ext>
+#   - The first CV per profile is auto-default. Setting a different
+#     default clears the previous one (invariant: exactly-one-default
+#     per profile).
+
+from src.db import profiles_db as _profiles_db
+
+#: Root under which every per-profile CV file lives. The download endpoint
+#: refuses to serve any path that resolves outside it.
+PROFILE_CV_ROOT = _profiles_db.PROFILE_CV_ROOT
+
+
+@app.get("/app/profiles", response_class=HTMLResponse)
+def app_profiles_index():
+    """The standalone /app/profiles index (its own CSS/JS)."""
+    page = STATIC_DIR / "profiles.html"
+    if not page.exists():  # pragma: no cover — file ships in repo
+        return HTMLResponse(
+            "<h1>Profiles unavailable</h1>"
+            "<p>web/static/profiles.html is missing.</p>",
+            status_code=500,
+        )
+    return HTMLResponse(page.read_text(encoding="utf-8"))
+
+
+@app.get("/app/profiles/{profile_id}", response_class=HTMLResponse)
+def app_profile_edit(profile_id: str):
+    """The standalone /app/profiles/{id} editor (its own CSS/JS)."""
+    page = STATIC_DIR / "profile-edit.html"
+    if not page.exists():  # pragma: no cover — file ships in repo
+        return HTMLResponse(
+            "<h1>Profile editor unavailable</h1>"
+            "<p>web/static/profile-edit.html is missing.</p>",
+            status_code=500,
+        )
+    return HTMLResponse(page.read_text(encoding="utf-8"))
+
+
+# --- list / create / update / delete -----------------------------------
+
+@app.get("/api/profiles")
+def api_profiles_list(request: Request):
+    """List the caller's profiles. Auto-seeds a default for the admin.
+
+    The response includes ``cv_count`` per row so the index page can render
+    the "# CVs" meta line without a second round-trip per card.
+    """
+    uid = _profile_uid(request)
+    if uid == ADMIN_USER_ID:
+        # Idempotent: returns the existing default if present.
+        _profiles_db.ensure_admin_default()
+    else:
+        _profiles_db.ensure_default_profile_for_user(uid)
+    items = _profiles_db.list_profiles(uid)
+    default = _profiles_db.get_default_profile(uid)
+
+    # One cheap query for the whole user's CV counts (instead of N queries).
+    from src.db import users_db as _users_db
+    users_conn = _users_db.connect_users_db()
+    try:
+        rows = users_conn.execute(
+            "SELECT profile_id, COUNT(*) AS c FROM profile_cvs "
+            "WHERE user_id = ? GROUP BY profile_id",
+            (uid,),
+        ).fetchall()
+        counts = {r["profile_id"]: int(r["c"]) for r in rows}
+    finally:
+        users_conn.close()
+    for item in items:
+        item["cv_count"] = counts.get(item["id"], 0)
+
+    return {
+        "items": items,
+        "default_id": default["id"] if default else "",
+    }
+
+
+class _ProfileCreateBody(BaseModel):
+    name: str
+    kind: Optional[str] = "role"
+    headline: Optional[str] = None
+    summary: Optional[str] = None
+    experience: Optional[List[Dict[str, Any]]] = None
+    skills: Optional[List[str]] = None
+    links: Optional[List[Dict[str, str]]] = None
+    make_default: Optional[bool] = False
+
+
+@app.post("/api/profiles", status_code=201)
+def api_profiles_create(request: Request, body: _ProfileCreateBody):
+    uid = _profile_uid(request)
+    try:
+        profile = _profiles_db.create_profile(
+            user_id=uid,
+            name=body.name,
+            kind=body.kind or "role",
+            headline=body.headline or "",
+            summary=body.summary or "",
+            experience=body.experience or [],
+            skills=body.skills or [],
+            links=body.links or [],
+            make_default=bool(body.make_default),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return profile
+
+
+@app.get("/api/profiles/{profile_id}")
+def api_profiles_get(request: Request, profile_id: str):
+    uid = _profile_uid(request)
+    profile = _profiles_db.get_profile(uid, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="profile not found")
+    return profile
+
+
+class _ProfileUpdateBody(BaseModel):
+    name: Optional[str] = None
+    kind: Optional[str] = None
+    headline: Optional[str] = None
+    summary: Optional[str] = None
+    experience: Optional[List[Dict[str, Any]]] = None
+    skills: Optional[List[str]] = None
+    links: Optional[List[Dict[str, str]]] = None
+
+
+@app.put("/api/profiles/{profile_id}")
+def api_profiles_update(
+    request: Request, profile_id: str, body: Optional[_ProfileUpdateBody] = None
+):
+    # ``body`` is deliberately optional: FastAPI validates declared params
+    # BEFORE the handler body runs, so a required body would answer an
+    # unauthenticated PUT with 422 (validation) instead of 401 (auth). An
+    # empty body means "change nothing", which update_profile handles.
+    uid = _profile_uid(request)
+    fields = body.model_dump(exclude_unset=True) if body is not None else {}
+    try:
+        updated = _profiles_db.update_profile(
+            user_id=uid, profile_id=profile_id, fields=fields,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if updated is None:
+        raise HTTPException(status_code=404, detail="profile not found")
+    return updated
+
+
+@app.delete("/api/profiles/{profile_id}")
+def api_profiles_delete(request: Request, profile_id: str):
+    uid = _profile_uid(request)
+    try:
+        ok = _profiles_db.delete_profile(uid, profile_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not ok:
+        raise HTTPException(status_code=404, detail="profile not found")
+    return {"ok": True}
+
+
+@app.post("/api/profiles/{profile_id}/default")
+def api_profiles_set_default(request: Request, profile_id: str):
+    uid = _profile_uid(request)
+    updated = _profiles_db.set_default_profile(uid, profile_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="profile not found")
+    return updated
+
+
+# --- CV CRUD ------------------------------------------------------------
+
+@app.get("/api/profiles/{profile_id}/cvs")
+def api_profile_cvs_list(request: Request, profile_id: str):
+    uid = _profile_uid(request)
+    profile = _profiles_db.get_profile(uid, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="profile not found")
+    items = _profiles_db.list_cvs(uid, profile_id)
+    default_cv = _profiles_db.get_default_cv(uid, profile_id)
+    return {
+        "items": items,
+        "default_id": default_cv["id"] if default_cv else "",
+    }
+
+
+@app.post("/api/profiles/{profile_id}/cvs", status_code=201)
+async def api_profile_cvs_upload(
+    request: Request,
+    profile_id: str,
+    file: _UploadFile = _File(...),
+    # Annotated with Form() so FastAPI binds it from the multipart body.
+    # Without this, a bare Optional[str] is treated as a QUERY parameter and
+    # a `-F label=...` upload silently lands with the filename as its label.
+    label: Optional[str] = _Form(None),
+):
+    uid = _profile_uid(request)
+    profile = _profiles_db.get_profile(uid, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="profile not found")
+
+    filename = (file.filename or "").strip()
+    if not filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in _profiles_db.CV_ALLOWED_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{ext or filename}'. "
+                   f"Allowed: {', '.join('.' + e for e in _profiles_db.CV_ALLOWED_EXTS)}",
+        )
+
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(64 * 1024):
+        total += len(chunk)
+        if total > _profiles_db.CV_MAX_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"CV is larger than the "
+                       f"{_profiles_db.CV_MAX_BYTES // (1024*1024)} MB limit",
+            )
+        chunks.append(chunk)
+    if total == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    try:
+        cv = _profiles_db.add_cv(
+            user_id=uid, profile_id=profile_id,
+            filename=filename, file_bytes=b"".join(chunks),
+            # Optional user-facing name for this base CV ("Base CTO").
+            # Falls back to the filename inside add_cv when blank.
+            label=(label or "").strip(),
+            mime_type=(file.content_type or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return cv
+
+
+@app.get("/api/profiles/{profile_id}/cvs/{cv_id}")
+def api_profile_cv_download(request: Request, profile_id: str, cv_id: str):
+    """Download one base CV belonging to the caller's profile."""
+    uid = _profile_uid(request)
+    profile = _profiles_db.get_profile(uid, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="profile not found")
+    cv = _profiles_db.get_cv(uid, cv_id)
+    if cv is None or cv["profile_id"] != profile_id:
+        raise HTTPException(status_code=404, detail="cv not found")
+
+    # file_path is stored relative to PROFILE_CV_ROOT (not PROJECT_ROOT),
+    # so resolve against that root — and refuse anything escaping it.
+    path = (PROFILE_CV_ROOT / cv["file_path"]).resolve()
+    try:
+        path.relative_to(PROFILE_CV_ROOT.resolve())
+    except ValueError:
+        raise HTTPException(status_code=404, detail="cv file not found")
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="cv file not found")
+
+    return FileResponse(
+        str(path),
+        media_type=cv["mime_type"]
+        or _CV_MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream"),
+        filename=cv["label"] or cv["filename"],
+    )
+
+
+@app.post("/api/profiles/{profile_id}/cvs/{cv_id}/default")
+def api_profile_cv_set_default(
+    request: Request, profile_id: str, cv_id: str
+):
+    uid = _profile_uid(request)
+    updated = _profiles_db.set_default_cv(uid, profile_id, cv_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="cv not found")
+    return updated
+
+
+@app.delete("/api/profiles/{profile_id}/cvs/{cv_id}")
+def api_profile_cvs_delete(
+    request: Request, profile_id: str, cv_id: str
+):
+    uid = _profile_uid(request)
+    if not _profiles_db.delete_cv(uid, cv_id):
+        raise HTTPException(status_code=404, detail="cv not found")
+    return {"ok": True}
+
+
+# --- per-job profile binding ------------------------------------------
+
+class _JobProfileBody(BaseModel):
+    profile_id: Optional[str] = None  # None = clear override, use default
+
+
+@app.put("/api/jobs/{job_id}/profile")
+def api_jobs_set_profile(
+    request: Request, job_id: int, body: Optional[_JobProfileBody] = None
+):
+    """Bind a job to a specific profile (or clear the binding).
+
+    The body is optional so an unauthenticated request is rejected with 401
+    by ``_require_auth`` rather than 422 by FastAPI's validation pass.
+    """
+    _require_auth(request)
+    profile_id = (body.profile_id if body is not None else None) or ""
+    conn = _connect(request)
+    try:
+        row = conn.execute(
+            "SELECT id FROM jobs WHERE id = ?", (job_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        # Empty string / None clears the override.
+        new_val = profile_id.strip() or None
+        if new_val:
+            uid = _profile_uid(request)
+            profile = _profiles_db.get_profile(uid, new_val)
+            if profile is None:
+                raise HTTPException(
+                    status_code=404, detail="profile not found"
+                )
+        conn.execute(
+            "UPDATE jobs SET profile_id = ?, updated_at = ? WHERE id = ?",
+            (new_val, datetime.now(timezone.utc).isoformat(), job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "profile_id": new_val or ""}
 
 
 # ---------------------------------------------------------------------------

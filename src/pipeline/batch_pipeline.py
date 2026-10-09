@@ -351,8 +351,15 @@ def generate_documents(job, output_dir):
 
     env_for_subprocess = os.environ.copy()
 
+    # Phase 2.7 — per-job profile binding. A job that carries a profile_id
+    # renders from that profile row; otherwise no flag is passed and each
+    # generator falls back to the global config / default profile, which
+    # preserves the legacy single-profile behaviour exactly.
+    profile_id = (job.get("profile_id") or "").strip()
+    profile_arg = f' --profile-id "{profile_id}"' if profile_id else ""
+
     # Generate CV
-    cv_cmd = f'{CV_GENERATOR} --company "{job.get("company", "")}" --tagline "{tagline}" --language {lang} --output "{cv_path}"'
+    cv_cmd = f'{CV_GENERATOR} --company "{job.get("company", "")}" --tagline "{tagline}" --language {lang} --output "{cv_path}"{profile_arg}'
     try:
         subprocess.run(cv_cmd, shell=True, timeout=60, check=True, capture_output=True, env=env_for_subprocess)
         log.info("  CV generated: %s", cv_path)
@@ -369,7 +376,7 @@ def generate_documents(job, output_dir):
     if not cl_result:
         # Pass --job-location so the letter shows Rostock/Berlin/Düsseldorf, NOT
         # the candidate's Aarschot address in the recipient block.
-        cl_cmd = f'{CL_GENERATOR} --company "{job.get("company", "")}" --role "{job.get("title", "")}" --language {lang} --output "{cl_path}"'
+        cl_cmd = f'{CL_GENERATOR} --company "{job.get("company", "")}" --role "{job.get("title", "")}" --language {lang} --output "{cl_path}"{profile_arg}'
         if job_location:
             # Escape any quotes in the location string
             loc_escaped = job_location.replace('"', '\\"')

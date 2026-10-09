@@ -37,6 +37,46 @@ def _load_cv_data() -> dict:
         }
     }
 
+
+def _apply_profile_data(user_id: str, profile_id: str) -> bool:
+    """Phase 2.7: override PERSONAL with a profile row from the DB.
+
+    Returns True when a profile was found and applied. The cover letter
+    generator only needs the personal block (name, email, location) and
+    the headline/summary, so the mapping is intentionally minimal.
+    """
+    global CV_DATA, PERSONAL
+    try:
+        from src.db import profiles_db as _profiles_db
+        profile = _profiles_db.get_profile(user_id, profile_id)
+    except Exception:
+        profile = None
+    if profile is None:
+        return False
+    personal = dict(CV_DATA.get("personal", {}))
+    for link in profile.get("links") or []:
+        kind = (link.get("kind") or "").lower()
+        url = link.get("url") or ""
+        if kind == "linkedin" and not personal.get("linkedin"):
+            personal["linkedin"] = url
+        elif kind == "github" and not personal.get("github"):
+            personal["github"] = url
+        elif kind in ("portfolio", "other"):
+            # Personal has a `websites` list. Append anything that isn't
+            # already there, so the cover letter's contact block can render
+            # a Portfolio / Other link.
+            sites = list(personal.get("websites") or [])
+            if url and url not in sites:
+                sites.append(url)
+            personal["websites"] = sites
+    CV_DATA = dict(CV_DATA)
+    CV_DATA["personal"] = personal
+    CV_DATA["title_en"] = profile.get("headline", "") or CV_DATA.get("title_en", "")
+    CV_DATA["summary_en"] = profile.get("summary", "") or CV_DATA.get("summary_en", "")
+    PERSONAL = personal
+    return True
+
+
 CV_DATA = _load_cv_data()
 PERSONAL = CV_DATA["personal"]
 
@@ -217,7 +257,19 @@ def main():
     parser.add_argument("--output", default=None, help="Output PDF path")
     parser.add_argument("--job-location", default=None,
                         help="Location of the JOB (used in the letter — NOT candidate's location)")
+    # Phase 2.7: optional profile override. When --profile-id is set,
+    # the cover letter renders from that profile row (the personal
+    # block + headline/summary + links). Without --profile-id, the
+    # legacy global config drives everything.
+    parser.add_argument("--user-id", default=os.getenv("LARS_USER_ID", "lars"),
+                        help="Owner of the profile (defaults to admin/LARS_USER_ID)")
+    parser.add_argument("--profile-id", default=None,
+                        help="Phase 2.7: render personal block from a specific profile. "
+                             "Falls back to config/lars-cv-data.json when omitted.")
     args = parser.parse_args()
+
+    if args.profile_id:
+        _apply_profile_data(args.user_id, args.profile_id)
 
     if args.body_file and os.path.exists(args.body_file):
         with open(args.body_file) as f:

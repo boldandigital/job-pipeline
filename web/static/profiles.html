@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Profiles · CaptainApply</title>
+  <meta name="description" content="Manage your CV / headline / experience variants. Each profile can carry its own set of base CVs and be the default for a given application." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2306b6d4'/><text x='16' y='22' text-anchor='middle' font-size='18' font-family='Inter,sans-serif' font-weight='700' fill='white'>⚓</text></svg>" />
+  <style>
+    /* ======================================================================
+       Profiles index — own styles, no shared CSS with the dashboard.
+       Same visual language as profile.html (Inter / Inter Tight / JetBrains
+       Mono) so the two pages feel like siblings.
+       ====================================================================== */
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: #F8FAFC;
+      color: #0F172A;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+    a { color: #0EA5E9; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ---------- Top bar ---------- */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: saturate(180%) blur(12px);
+      border-bottom: 1px solid #E2E8F0;
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .topbar__back {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: #475569; font-size: 14px; font-weight: 500;
+    }
+    .topbar__back:hover { color: #0F172A; text-decoration: none; }
+    .topbar__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700; font-size: 20px; letter-spacing: -0.01em;
+      margin: 0; flex: 1;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px; border: 1px solid #E2E8F0;
+      background: #fff; color: #0F172A; font-size: 14px; font-weight: 500;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    }
+    .btn:hover { background: #F1F5F9; border-color: #CBD5E1; }
+    .btn--primary {
+      background: #0F172A; color: #fff; border-color: #0F172A;
+    }
+    .btn--primary:hover { background: #1E293B; border-color: #1E293B; }
+    .btn--danger {
+      background: #fff; color: #DC2626; border-color: #FECACA;
+    }
+    .btn--danger:hover { background: #FEF2F2; border-color: #FCA5A5; }
+    .btn--sm { padding: 5px 10px; font-size: 12px; }
+    .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+    /* ---------- Page layout ---------- */
+    .page {
+      max-width: 1080px; margin: 0 auto; padding: 32px 24px 96px;
+    }
+    .page__intro {
+      margin: 8px 0 28px;
+      color: #475569; font-size: 15px;
+    }
+
+    /* ---------- Profile card grid ---------- */
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    .pcard {
+      background: #fff; border: 1px solid #E2E8F0; border-radius: 14px;
+      padding: 20px 22px 18px; display: flex; flex-direction: column; gap: 12px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      position: relative;
+    }
+    .pcard:hover { border-color: #CBD5E1; box-shadow: 0 4px 14px rgba(15,23,42,0.05); }
+    .pcard--default {
+      border-color: #10B981;
+      box-shadow: 0 0 0 1px rgba(16,185,129,0.15) inset;
+    }
+    .pcard__head {
+      display: flex; align-items: flex-start; gap: 12px;
+    }
+    .pcard__name {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700; font-size: 17px; letter-spacing: -0.01em;
+      margin: 0; flex: 1; word-break: break-word;
+    }
+    .pcard__badge {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 3px 8px; border-radius: 999px; flex-shrink: 0;
+    }
+    .pcard__badge--default { background: #D1FAE5; color: #047857; }
+    .pcard__badge--role    { background: #E0F2FE; color: #0369A1; }
+    .pcard__badge--defaultkind { background: #F1F5F9; color: #475569; }
+    .pcard__headline {
+      color: #475569; font-size: 13px; line-height: 1.45;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .pcard__meta {
+      display: flex; align-items: center; gap: 10px;
+      color: #64748B; font-size: 12px;
+    }
+    .pcard__meta strong { color: #0F172A; font-weight: 600; }
+    .pcard__actions {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin-top: 4px; padding-top: 12px;
+      border-top: 1px solid #F1F5F9;
+    }
+    .pcard__actions .btn { flex: 1; justify-content: center; min-width: 0; }
+    .pcard__actions .btn--sm { flex: 0 0 auto; }
+
+    /* ---------- Empty state ---------- */
+    .empty {
+      background: #fff; border: 1px dashed #CBD5E1; border-radius: 14px;
+      padding: 48px 24px; text-align: center; color: #64748B;
+    }
+    .empty__icon { font-size: 32px; margin-bottom: 8px; }
+    .empty__title {
+      font-family: 'Inter Tight', sans-serif; font-weight: 700;
+      color: #0F172A; font-size: 17px; margin: 0 0 6px;
+    }
+    .empty__sub { margin: 0 0 14px; }
+
+    /* ---------- New-profile modal ---------- */
+    .modal {
+      position: fixed; inset: 0; background: rgba(15,23,42,0.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 20px;
+    }
+    .modal[hidden] { display: none; }
+    .modal__card {
+      background: #fff; border-radius: 14px; padding: 28px;
+      max-width: 480px; width: 100%;
+      box-shadow: 0 20px 40px rgba(15,23,42,0.2);
+    }
+    .modal__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700; font-size: 18px; margin: 0 0 14px;
+    }
+    .modal__field { margin-bottom: 14px; }
+    .modal__field label {
+      display: block; font-size: 12px; font-weight: 600;
+      color: #475569; text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+    .modal__field input,
+    .modal__field textarea,
+    .modal__field select {
+      width: 100%; font: inherit; font-size: 14px;
+      padding: 9px 12px; border: 1px solid #CBD5E1; border-radius: 8px;
+      background: #fff; color: #0F172A;
+    }
+    .modal__field input:focus,
+    .modal__field textarea:focus {
+      outline: none; border-color: #0EA5E9;
+      box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+    }
+    .modal__field textarea { min-height: 84px; resize: vertical; }
+    .modal__field--check {
+      display: flex; align-items: center; gap: 8px;
+      text-transform: none; letter-spacing: 0; font-size: 13px;
+      color: #475569; font-weight: 500;
+    }
+    .modal__field--check input { width: auto; }
+    .modal__actions {
+      display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;
+    }
+
+    /* ---------- Toast ---------- */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: #0F172A; color: #fff;
+      padding: 10px 18px; border-radius: 8px; font-size: 14px;
+      font-weight: 500; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s; z-index: 1100;
+    }
+    .toast.is-show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast--err { background: #DC2626; }
+
+    /* ---------- Loading skeleton ---------- */
+    .skeleton {
+      background: linear-gradient(90deg, #F1F5F9 0%, #E2E8F0 50%, #F1F5F9 100%);
+      background-size: 200% 100%;
+      animation: skel 1.4s ease-in-out infinite;
+      border-radius: 6px; height: 14px;
+    }
+    @keyframes skel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+
+  <!-- ===========================================
+       TOP BAR
+       =========================================== -->
+  <header class="topbar">
+    <a class="topbar__back" href="/app/">← Back to dashboard</a>
+    <h1 class="topbar__title">Profiles</h1>
+    <button type="button" class="btn btn--primary" id="new-btn">+ New profile</button>
+  </header>
+
+  <main class="page">
+    <p class="page__intro">
+      One user, many hats. Each profile is a self-contained CV variant — its own
+      headline, summary, experience, skills, links, and a small library of base CVs.
+      Switch profiles per job so the right one always lands.
+    </p>
+
+    <!-- ===========================================
+         PROFILE CARD GRID (rendered by JS)
+         =========================================== -->
+    <div class="grid" id="profiles-grid">
+      <div class="skeleton" style="height: 160px;"></div>
+      <div class="skeleton" style="height: 160px;"></div>
+    </div>
+  </main>
+
+  <!-- ===========================================
+       NEW PROFILE MODAL
+       =========================================== -->
+  <div class="modal" id="new-modal" hidden>
+    <div class="modal__card">
+      <h2 class="modal__title">New profile</h2>
+      <div class="modal__field">
+        <label for="np-name">Name *</label>
+        <input type="text" id="np-name" maxlength="80" autocomplete="off"
+               placeholder="e.g. BD Lead DACH" />
+      </div>
+      <div class="modal__field">
+        <label for="np-headline">Headline</label>
+        <input type="text" id="np-headline" maxlength="200" autocomplete="off"
+               placeholder="e.g. Senior BD · 8 yrs hosting" />
+      </div>
+      <div class="modal__field">
+        <label for="np-summary">Summary</label>
+        <textarea id="np-summary" maxlength="2000"
+                  placeholder="A short pitch for this profile."></textarea>
+      </div>
+      <div class="modal__field">
+        <label class="modal__field--check">
+          <input type="checkbox" id="np-default" />
+          Make this the default profile
+        </label>
+      </div>
+      <div class="modal__actions">
+        <button type="button" class="btn" id="np-cancel">Cancel</button>
+        <button type="button" class="btn btn--primary" id="np-create">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+  /* =========================================================================
+     Profiles index — own JS, no shared scripts with the dashboard.
+     Sections:
+       1. State + helpers
+       2. Render profile cards
+       3. New-profile modal
+       4. Actions: set default, delete
+     ========================================================================= */
+  (function () {
+    'use strict';
+
+    // ---------------------------------------------------------------------
+    // 1. State + helpers
+    // ---------------------------------------------------------------------
+
+    const state = {
+      items: [],
+      defaultId: '',
+    };
+
+    function $(sel, root) { return (root || document).querySelector(sel); }
+    function $$(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
+
+    function showToast(msg, isErr) {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.classList.toggle('toast--err', !!isErr);
+      t.classList.add('is-show');
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => t.classList.remove('is-show'), 2400);
+    }
+
+    function escapeHTML(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    async function fetchJSON(url, opts) {
+      const r = await fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}));
+      if (!r.ok) {
+        let detail = '';
+        try { detail = (await r.json()).detail || ''; } catch (e) {}
+        throw new Error(detail || ('HTTP ' + r.status));
+      }
+      return r.json();
+    }
+
+    // ---------------------------------------------------------------------
+    // 2. Render
+    // ---------------------------------------------------------------------
+
+    async function boot() {
+      try {
+        const listing = await fetchJSON('/api/profiles');
+        state.items = listing.items || [];
+        state.defaultId = listing.default_id || '';
+        render();
+      } catch (e) {
+        $('#profiles-grid').innerHTML =
+          '<div class="empty"><div class="empty__icon">!</div>' +
+          '<h2 class="empty__title">Could not load profiles</h2>' +
+          '<p class="empty__sub">' + escapeHTML(e.message) + '</p></div>';
+      }
+    }
+
+    function render() {
+      const grid = $('#profiles-grid');
+      grid.innerHTML = '';
+      if (state.items.length === 0) {
+        grid.appendChild(buildEmpty());
+        return;
+      }
+      state.items.forEach(p => grid.appendChild(buildCard(p)));
+    }
+
+    function buildEmpty() {
+      const d = document.createElement('div');
+      d.className = 'empty';
+      d.style.gridColumn = '1 / -1';
+      d.innerHTML = `
+        <div class="empty__icon">⚓</div>
+        <h2 class="empty__title">No profiles yet</h2>
+        <p class="empty__sub">Create your first profile to start tailoring applications.</p>
+      `;
+      return d;
+    }
+
+    function buildCard(p) {
+      const card = document.createElement('article');
+      card.className = 'pcard';
+      if (p.is_default) card.classList.add('pcard--default');
+      card.dataset.profileId = p.id;
+
+      // Badge — "Default" wins over kind, since a default can be any kind.
+      let badge = '';
+      if (p.is_default) {
+        badge = '<span class="pcard__badge pcard__badge--default">Default</span>';
+      } else if (p.kind === 'role') {
+        badge = '<span class="pcard__badge pcard__badge--role">Role</span>';
+      } else if (p.kind === 'default') {
+        badge = '<span class="pcard__badge pcard__badge--defaultkind">Default kind</span>';
+      }
+
+      // Meta line: # CVs + "updated" date
+      const updated = p.updated_at ? new Date(p.updated_at) : null;
+      const updatedTxt = updated ? '· updated ' + updated.toLocaleDateString() : '';
+
+      card.innerHTML = `
+        <div class="pcard__head">
+          <h2 class="pcard__name">${escapeHTML(p.name || 'Untitled')}</h2>
+          ${badge}
+        </div>
+        <div class="pcard__headline">${
+          escapeHTML(p.headline || p.summary || 'No headline yet — click Edit to fill it in.')
+        }</div>
+        <div class="pcard__meta">
+          <span><strong>${p.cv_count != null ? p.cv_count : 0}</strong> CVs</span>
+          <span>${escapeHTML(updatedTxt)}</span>
+        </div>
+        <div class="pcard__actions">
+          <button type="button" class="btn btn--sm" data-action="edit">Edit</button>
+          ${p.is_default
+            ? '<button type="button" class="btn btn--sm" data-action="default" disabled>Default</button>'
+            : '<button type="button" class="btn btn--sm" data-action="default">Set default</button>'}
+          <button type="button" class="btn btn--sm btn--danger" data-action="delete">Delete</button>
+        </div>
+      `;
+      card.querySelector('[data-action="edit"]').addEventListener('click', () => {
+        window.location.href = '/app/profiles/' + encodeURIComponent(p.id);
+      });
+      const defBtn = card.querySelector('[data-action="default"]');
+      if (defBtn && !defBtn.disabled) {
+        defBtn.addEventListener('click', () => doSetDefault(p.id));
+      }
+      card.querySelector('[data-action="delete"]').addEventListener('click', () => doDelete(p));
+      return card;
+    }
+
+    // ---------------------------------------------------------------------
+    // 3. New profile modal
+    // ---------------------------------------------------------------------
+
+    function openNewModal() {
+      $('#np-name').value = '';
+      $('#np-headline').value = '';
+      $('#np-summary').value = '';
+      $('#np-default').checked = false;
+      $('#new-modal').hidden = false;
+      $('#np-name').focus();
+    }
+    function closeNewModal() {
+      $('#new-modal').hidden = true;
+    }
+
+    async function doCreate() {
+      const name = $('#np-name').value.trim();
+      if (!name) { showToast('Name is required', true); return; }
+      const payload = {
+        name: name,
+        headline: $('#np-headline').value.trim(),
+        summary: $('#np-summary').value.trim(),
+        make_default: $('#np-default').checked,
+      };
+      try {
+        const created = await fetchJSON('/api/profiles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        showToast('Profile created');
+        closeNewModal();
+        // Jump straight to the editor — that's the interesting next step.
+        window.location.href = '/app/profiles/' + encodeURIComponent(created.id);
+      } catch (e) {
+        showToast('Create failed: ' + e.message, true);
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // 4. Actions
+    // ---------------------------------------------------------------------
+
+    async function doSetDefault(id) {
+      try {
+        await fetchJSON('/api/profiles/' + encodeURIComponent(id) + '/default', {
+          method: 'POST',
+        });
+        showToast('Default profile updated');
+        await boot();
+      } catch (e) {
+        showToast('Set default failed: ' + e.message, true);
+      }
+    }
+
+    async function doDelete(p) {
+      const n = state.items.length;
+      if (n <= 1) {
+        showToast('Create another profile first', true);
+        return;
+      }
+      if (!confirm('Delete profile "' + (p.name || 'Untitled') + '"? This cannot be undone.')) {
+        return;
+      }
+      try {
+        await fetchJSON('/api/profiles/' + encodeURIComponent(p.id), {
+          method: 'DELETE',
+        });
+        showToast('Profile deleted');
+        await boot();
+      } catch (e) {
+        showToast('Delete failed: ' + e.message, true);
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // Wire-up
+    // ---------------------------------------------------------------------
+
+    document.addEventListener('DOMContentLoaded', () => {
+      $('#new-btn').addEventListener('click', openNewModal);
+      $('#np-cancel').addEventListener('click', closeNewModal);
+      $('#np-create').addEventListener('click', doCreate);
+      // Close modal on backdrop click
+      $('#new-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'new-modal') closeNewModal();
+      });
+      // Cmd-Enter to submit
+      $('#new-modal').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) doCreate();
+        if (e.key === 'Escape') closeNewModal();
+      });
+      boot();
+    });
+  })();
+  </script>
+</body>
+</html>

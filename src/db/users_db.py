@@ -559,7 +559,13 @@ def _admin_profile() -> dict[str, Any]:
 
 def get_profile(uid: str) -> dict[str, Any]:
     """Return the profile dict for a user. Never raises for a missing row —
-    an unknown or admin user gets the empty/read-only shape instead."""
+    an unknown or admin user gets the empty/read-only shape instead.
+
+    Phase 2.7: the headline/summary/links/experience/skills now live on
+    the default row of the new ``profiles`` table. The users row still
+    owns name/phone/location/email/plan/cv/onboarding so other endpoints
+    keep reading the same fields without a second lookup.
+    """
     if uid == ADMIN_USER_ID:
         return _admin_profile()
     conn = connect_users_db()
@@ -571,7 +577,20 @@ def get_profile(uid: str) -> dict[str, Any]:
         conn.close()
     if row is None:
         return {}
-    return _profile_row_to_dict(row)
+    base = _profile_row_to_dict(row)
+    # Compose with the default profile row (Phase 2.7).
+    try:
+        from . import profiles_db as _profiles_db
+        default = _profiles_db.get_default_profile(uid)
+    except Exception:
+        default = None
+    if default is not None:
+        base["headline"] = default.get("headline") or base["headline"]
+        base["summary"] = default.get("summary") or base["summary"]
+        base["links"] = default.get("links") or []
+        base["experience"] = default.get("experience") or []
+        base["skills"] = default.get("skills") or []
+    return base
 
 
 def normalise_links(links: Any) -> list[dict[str, str]]:
@@ -653,6 +672,12 @@ def set_profile(uid: str, fields: dict[str, Any]) -> bool:
 
     Only whitelisted keys are considered; ``email``, ``password_hash``,
     ``plan`` and ``verified`` are NOT writable through this path.
+
+    Phase 2.7: name/phone/location stay on the users row. The
+    headline/summary/links/experience/skills fields are written to the
+    default row of the profiles table (auto-created on first call).
+    The users row keeps the legacy headline/summary columns as a mirror
+    so any direct DB reader that ignores profiles still sees a value.
     """
     if uid == ADMIN_USER_ID:
         return False
@@ -677,23 +702,44 @@ def set_profile(uid: str, fields: dict[str, Any]) -> bool:
         assignments.append(f"{json_col} = ?")
         values.append(json.dumps(normalised, ensure_ascii=False))
 
-    if not assignments:
-        return False
+    wrote_users = False
+    if assignments:
+        assignments.append("updated_at = ?")
+        values.append(_now_iso())
+        values.append(uid)
+        conn = connect_users_db()
+        try:
+            _apply_migrations(conn)
+            cur = conn.execute(
+                f"UPDATE users SET {', '.join(assignments)} WHERE id = ?", values
+            )
+            conn.commit()
+            wrote_users = cur.rowcount > 0
+        finally:
+            conn.close()
 
-    assignments.append("updated_at = ?")
-    values.append(_now_iso())
-    values.append(uid)
+    # Phase 2.7: also write the profile-owned fields to the default
+    # profile row. The users-row write above keeps them as a mirror so
+    # direct-DB readers continue to work; the source of truth becomes
+    # the profiles table.
+    profile_fields: dict[str, Any] = {}
+    for key in ("headline", "summary", "links", "experience", "skills"):
+        if key in fields:
+            profile_fields[key] = fields[key]
+    if profile_fields:
+        try:
+            from . import profiles_db as _profiles_db
+            # Make sure a default row exists for this user.
+            _profiles_db.ensure_default_profile_for_user(uid)
+            default = _profiles_db.get_default_profile(uid)
+            if default is not None:
+                _profiles_db.update_profile(
+                    uid, default["id"], profile_fields
+                )
+        except Exception as exc:
+            log.warning("profile table write failed: %s", exc)
 
-    conn = connect_users_db()
-    try:
-        _apply_migrations(conn)
-        cur = conn.execute(
-            f"UPDATE users SET {', '.join(assignments)} WHERE id = ?", values
-        )
-        conn.commit()
-        return cur.rowcount > 0
-    finally:
-        conn.close()
+    return wrote_users or bool(profile_fields)
 
 
 def set_cv_upload(uid: str, relative_path: str) -> Optional[str]:

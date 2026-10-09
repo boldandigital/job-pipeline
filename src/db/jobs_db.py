@@ -127,7 +127,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     motivation_ok INTEGER DEFAULT 0,
     approved_at TEXT,
     created_at TEXT,
-    updated_at TEXT
+    updated_at TEXT,
+    -- Phase 2.7 — per-job profile binding. NULL means "use the user's
+    -- default profile at render time".
+    profile_id TEXT
 );
 """
 
@@ -139,6 +142,10 @@ _GATE_MIGRATIONS = [
     "ALTER TABLE jobs ADD COLUMN anschreiben_ok INTEGER DEFAULT 0",
     "ALTER TABLE jobs ADD COLUMN motivation_ok INTEGER DEFAULT 0",
     "ALTER TABLE jobs ADD COLUMN approved_at TEXT",
+    # Phase 2.7 — per-job profile binding. A job can override the user's
+    # default profile (e.g. an application to a HostSalt role uses the
+    # "hosting_infra" profile even if the default is the agency profile).
+    "ALTER TABLE jobs ADD COLUMN profile_id TEXT",
 ]
 
 
@@ -187,6 +194,11 @@ def connect_user_db(user_id: str = ADMIN_USER_ID) -> sqlite3.Connection:
     if "approved_at" not in existing_cols:
         try:
             conn.execute("ALTER TABLE jobs ADD COLUMN approved_at TEXT")
+        except Exception:
+            pass
+    if "profile_id" not in existing_cols:
+        try:
+            conn.execute("ALTER TABLE jobs ADD COLUMN profile_id TEXT")
         except Exception:
             pass
     conn.commit()

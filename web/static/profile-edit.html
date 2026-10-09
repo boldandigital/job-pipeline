@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Edit profile · CaptainApply</title>
+  <meta name="description" content="Edit a CV variant — name, headline, summary, experience, skills, links, and per-profile base CVs." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2306b6d4'/><text x='16' y='22' text-anchor='middle' font-size='18' font-family='Inter,sans-serif' font-weight='700' fill='white'>⚓</text></svg>" />
+  <style>
+    /* ======================================================================
+       Profile editor — own styles, no shared CSS with the dashboard.
+       Visual sibling of profile.html; same 3-section structure but bound
+       to a specific profile_id via the URL.
+       ====================================================================== */
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: #F8FAFC;
+      color: #0F172A;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+    a { color: #0EA5E9; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ---------- Top bar ---------- */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: saturate(180%) blur(12px);
+      border-bottom: 1px solid #E2E8F0;
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .topbar__back {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: #475569; font-size: 14px; font-weight: 500;
+    }
+    .topbar__back:hover { color: #0F172A; text-decoration: none; }
+    .topbar__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700; font-size: 20px; letter-spacing: -0.01em;
+      margin: 0; flex: 1; word-break: break-word;
+    }
+    .topbar__badge {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 3px 8px; border-radius: 999px;
+      background: #D1FAE5; color: #047857;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px; border: 1px solid #E2E8F0;
+      background: #fff; color: #0F172A; font-size: 14px; font-weight: 500;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    }
+    .btn:hover { background: #F1F5F9; border-color: #CBD5E1; }
+    .btn--primary {
+      background: #0F172A; color: #fff; border-color: #0F172A;
+    }
+    .btn--primary:hover { background: #1E293B; border-color: #1E293B; }
+    .btn--danger {
+      background: #fff; color: #DC2626; border-color: #FECACA;
+    }
+    .btn--danger:hover { background: #FEF2F2; border-color: #FCA5A5; }
+    .btn--sm { padding: 5px 10px; font-size: 12px; }
+    .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+    /* ---------- Page layout ---------- */
+    .page {
+      max-width: 880px; margin: 0 auto; padding: 32px 24px 96px;
+    }
+    .page__intro {
+      margin: 8px 0 28px;
+      color: #475569; font-size: 15px;
+    }
+
+    /* ---------- Section card ---------- */
+    .section {
+      background: #fff; border: 1px solid #E2E8F0; border-radius: 14px;
+      padding: 28px 28px 24px; margin-bottom: 20px;
+      box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+    }
+    .section__head {
+      display: flex; align-items: baseline; gap: 12px;
+      margin-bottom: 18px;
+    }
+    .section__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700; font-size: 17px; margin: 0; letter-spacing: -0.01em;
+    }
+    .section__sub {
+      color: #64748B; font-size: 13px; margin: 0;
+    }
+
+    /* ---------- Form fields ---------- */
+    .field { margin-bottom: 16px; }
+    .field__label {
+      display: block; font-size: 12px; font-weight: 600;
+      color: #475569; text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+    .field__hint { font-size: 12px; color: #94A3B8; margin-top: 4px; }
+    .field input[type="text"],
+    .field input[type="url"],
+    .field textarea,
+    .field select {
+      width: 100%;
+      font: inherit; font-size: 14px;
+      padding: 9px 12px; border: 1px solid #CBD5E1; border-radius: 8px;
+      background: #fff; color: #0F172A;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .field input:focus,
+    .field textarea:focus,
+    .field select:focus {
+      outline: none; border-color: #0EA5E9;
+      box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+    }
+    .field textarea { min-height: 96px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+
+    /* ---------- Repeater (links, experience) ---------- */
+    .repeater { display: flex; flex-direction: column; gap: 12px; }
+    .repeater__row {
+      border: 1px solid #E2E8F0; border-radius: 10px;
+      padding: 14px; background: #FCFDFE;
+      display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px;
+    }
+    .repeater__row--exp { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    .repeater__row .field { margin-bottom: 0; }
+    .repeater__remove {
+      align-self: start; margin-top: 22px;
+      background: none; border: 1px solid #FECACA; color: #DC2626;
+      border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 12px;
+    }
+    .repeater__remove:hover { background: #FEF2F2; }
+    .repeater__add {
+      align-self: flex-start;
+      background: #F1F5F9; border: 1px dashed #CBD5E1; color: #475569;
+      border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer;
+    }
+    .repeater__add:hover { background: #E2E8F0; color: #0F172A; }
+    @media (max-width: 720px) {
+      .repeater__row, .repeater__row--exp { grid-template-columns: 1fr 1fr; }
+      .repeater__remove { grid-column: 1 / -1; margin-top: 0; }
+    }
+
+    /* ---------- Skills chip input ---------- */
+    .chip-input__box {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px 8px;
+      background: #fff; min-height: 42px;
+    }
+    .chip-input__box:focus-within {
+      border-color: #0EA5E9; box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #E0F2FE; color: #0369A1; padding: 3px 8px;
+      border-radius: 999px; font-size: 12px; font-weight: 500;
+    }
+    .chip__remove {
+      cursor: pointer; font-weight: 700; padding: 0 2px; line-height: 1;
+      color: #0369A1; opacity: 0.6; background: none; border: none;
+    }
+    .chip__remove:hover { opacity: 1; }
+    .chip-input__input {
+      flex: 1; min-width: 100px; border: none; outline: none;
+      font: inherit; font-size: 14px; padding: 4px 0; background: transparent;
+    }
+
+    /* ---------- CV list (Section C) ---------- */
+    .cv-zone {
+      border: 2px dashed #CBD5E1; border-radius: 12px;
+      padding: 24px 20px; text-align: center; cursor: pointer;
+      background: #FCFDFE; transition: background 0.15s, border-color 0.15s;
+    }
+    .cv-zone:hover, .cv-zone.is-drag {
+      background: #F0F9FF; border-color: #0EA5E9;
+    }
+    .cv-zone__icon { font-size: 28px; line-height: 1; margin-bottom: 6px; }
+    .cv-zone__hint { color: #64748B; font-size: 13px; margin-top: 4px; }
+    .cv-zone__button {
+      display: inline-block; background: #0F172A; color: #fff;
+      padding: 8px 16px; border-radius: 8px; font-size: 13px;
+      font-weight: 500; margin-top: 12px;
+    }
+    .cv-list {
+      display: flex; flex-direction: column; gap: 10px;
+      margin-bottom: 14px;
+    }
+    .cv-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 16px; border: 1px solid #E2E8F0;
+      border-radius: 10px; background: #F8FAFC;
+    }
+    .cv-row__icon {
+      width: 40px; height: 40px; background: #FEE2E2; color: #DC2626;
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .cv-row__name { font-weight: 600; font-size: 14px; word-break: break-all; }
+    .cv-row__meta { color: #64748B; font-size: 12px; margin-top: 2px; }
+    .cv-row__actions { margin-left: auto; display: flex; gap: 8px; flex-shrink: 0; }
+    .cv-row__badge {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 2px 6px; border-radius: 999px;
+      background: #D1FAE5; color: #047857;
+    }
+
+    /* ---------- Toast ---------- */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: #0F172A; color: #fff;
+      padding: 10px 18px; border-radius: 8px; font-size: 14px;
+      font-weight: 500; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s; z-index: 1000;
+    }
+    .toast.is-show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast--err { background: #DC2626; }
+
+    /* ---------- Loading skeleton ---------- */
+    .skeleton {
+      background: linear-gradient(90deg, #F1F5F9 0%, #E2E8F0 50%, #F1F5F9 100%);
+      background-size: 200% 100%;
+      animation: skel 1.4s ease-in-out infinite;
+      border-radius: 6px; height: 14px;
+    }
+    @keyframes skel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+
+  <!-- ===========================================
+       TOP BAR
+       =========================================== -->
+  <header class="topbar">
+    <a class="topbar__back" href="/app/profiles">← All profiles</a>
+    <h1 class="topbar__title" id="page-title">Edit profile</h1>
+    <span class="topbar__badge" id="default-badge" hidden>Default</span>
+    <button type="button" class="btn btn--primary" id="save-btn" disabled>Save</button>
+  </header>
+
+  <main class="page">
+    <p class="page__intro" id="page-intro">
+      Tailor the headline, summary, and CVs for this role. Use the dashboard's
+      per-card profile picker to choose which profile backs each job.
+    </p>
+
+    <!-- ===========================================
+         SECTION A: PERSONAL (Name + headline + summary + links)
+         =========================================== -->
+    <section class="section" aria-labelledby="sec-personal">
+      <div class="section__head">
+        <h2 class="section__title" id="sec-personal">Personal</h2>
+        <p class="section__sub">Name, headline, summary, links</p>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="name">Profile name *</label>
+        <input type="text" id="name" name="name" maxlength="80"
+               placeholder="e.g. BD Lead DACH" />
+        <div class="field__hint">Shown on the dashboard's per-job picker.</div>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="headline">Headline</label>
+        <input type="text" id="headline" name="headline" maxlength="200"
+               placeholder="Senior BD · 8 yrs hosting" />
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="summary">Summary</label>
+        <textarea id="summary" name="summary" rows="5"
+                  placeholder="A 3-5 sentence pitch that introduces this profile."></textarea>
+        <div class="field__hint">Used as the opening paragraph on every CV + cover letter for this profile.</div>
+      </div>
+
+      <h3 class="section__title" style="font-size: 14px; margin-top: 24px;">Links</h3>
+      <div class="repeater" id="links-repeater" data-kind="links"></div>
+      <button type="button" class="repeater__add" data-add="links">+ Add link</button>
+      <div class="field__hint">Kinds are used to label the link on your CV.</div>
+    </section>
+
+    <!-- ===========================================
+         SECTION B: EXPERIENCE & SKILLS
+         =========================================== -->
+    <section class="section" aria-labelledby="sec-experience">
+      <div class="section__head">
+        <h2 class="section__title" id="sec-experience">Experience &amp; Skills</h2>
+        <p class="section__sub">Roles you've held + the skills you bring</p>
+      </div>
+
+      <h3 class="section__title" style="font-size: 14px; margin-top: 0;">Experience</h3>
+      <div class="repeater" id="exp-repeater" data-kind="experience"></div>
+      <button type="button" class="repeater__add" data-add="experience">+ Add role</button>
+
+      <h3 class="section__title" style="font-size: 14px; margin-top: 24px;">Skills</h3>
+      <div class="chip-input__box" id="skills-box">
+        <input type="text" class="chip-input__input" id="skills-input"
+               placeholder="Type a skill and press Enter (e.g. Python)" />
+      </div>
+      <div class="field__hint">Matched against job descriptions when scoring roles for this profile.</div>
+    </section>
+
+    <!-- ===========================================
+         SECTION C: CVs (per-profile base CV library)
+         =========================================== -->
+    <section class="section" aria-labelledby="sec-cvs">
+      <div class="section__head">
+        <h2 class="section__title" id="sec-cvs">CVs</h2>
+        <p class="section__sub">Base CVs tailored for this profile</p>
+      </div>
+
+      <div class="cv-list" id="cv-list">
+        <!-- rendered by JS -->
+      </div>
+
+      <div id="cv-zone" class="cv-zone" role="button" tabindex="0"
+           aria-label="Upload CV — drop file or click to browse">
+        <div class="cv-zone__icon">📄</div>
+        <div><strong>Drop a CV here</strong> or click to browse</div>
+        <div class="cv-zone__hint">PDF, DOCX, or DOC · max 5 MB</div>
+        <div class="cv-zone__button">Choose file</div>
+        <input type="file" id="cv-file" accept=".pdf,.docx,.doc"
+               style="display: none;" />
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+  /* =========================================================================
+     Profile editor — own JS.
+     Sections:
+       1. State + helpers
+       2. Boot: load profile + CVs in parallel
+       3. Section A: Personal two-way binding
+       4. Section B: Repeaters + skills chip input
+       5. Section C: CVs (upload, set default, delete, preview)
+       6. Save: PUT /api/profiles/{id}
+     ========================================================================= */
+  (function () {
+    'use strict';
+
+    // Pull the profile id from the URL: /app/profiles/{id}
+    const PROFILE_ID = (function () {
+      const m = window.location.pathname.match(/\/app\/profiles\/([^/?#]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    })();
+
+    // ---------------------------------------------------------------------
+    // 1. State + helpers
+    // ---------------------------------------------------------------------
+
+    const state = {
+      profile: null,
+      cvs: [],
+      defaultCvId: '',
+    };
+
+    function $(sel, root) { return (root || document).querySelector(sel); }
+    function $$(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
+
+    function showToast(msg, isErr) {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.classList.toggle('toast--err', !!isErr);
+      t.classList.add('is-show');
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => t.classList.remove('is-show'), 2400);
+    }
+
+    function escapeHTML(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    async function fetchJSON(url, opts) {
+      const r = await fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}));
+      if (!r.ok) {
+        let detail = '';
+        try { detail = (await r.json()).detail || ''; } catch (e) {}
+        throw new Error(detail || ('HTTP ' + r.status));
+      }
+      return r.json();
+    }
+
+    // ---------------------------------------------------------------------
+    // 2. Boot
+    // ---------------------------------------------------------------------
+
+    async function boot() {
+      if (!PROFILE_ID) {
+        showToast('No profile id in URL', true);
+        return;
+      }
+      try {
+        const [p, cvs] = await Promise.all([
+          fetchJSON('/api/profiles/' + encodeURIComponent(PROFILE_ID)),
+          fetchJSON('/api/profiles/' + encodeURIComponent(PROFILE_ID) + '/cvs'),
+        ]);
+        state.profile = p;
+        state.cvs = cvs.items || [];
+        state.defaultCvId = cvs.default_id || '';
+        render();
+        enableSaveOnEdit();
+      } catch (e) {
+        showToast('Could not load profile: ' + e.message, true);
+      }
+    }
+
+    function render() {
+      const p = state.profile;
+      $('#page-title').textContent = p.name || 'Edit profile';
+      $('#default-badge').hidden = !p.is_default;
+
+      $('#name').value = p.name || '';
+      $('#headline').value = p.headline || '';
+      $('#summary').value = p.summary || '';
+
+      renderLinks(p.links || []);
+      renderExperience(p.experience || []);
+      renderSkills(p.skills || []);
+      renderCvs();
+    }
+
+    // ---------------------------------------------------------------------
+    // 3. Section A — Personal two-way binding
+    // ---------------------------------------------------------------------
+
+    function enableSaveOnEdit() {
+      ['name', 'headline', 'summary'].forEach(id => {
+        const el = $('#' + id);
+        if (!el) return;
+        el.addEventListener('input', markDirty);
+      });
+    }
+
+    function markDirty() {
+      $('#save-btn').disabled = false;
+    }
+
+    // ---------------------------------------------------------------------
+    // 4. Section B — Repeaters + skills chip input
+    // ---------------------------------------------------------------------
+
+    function renderLinks(items) {
+      const root = $('#links-repeater');
+      root.innerHTML = '';
+      items.forEach((it) => addLinkRow(it));
+    }
+
+    // Link kinds are a fixed catalog (matches src/db/profiles_db.ALLOWED_LINK_KINDS).
+    const LINK_KINDS = [
+      { value: 'linkedin',  label: 'LinkedIn' },
+      { value: 'github',    label: 'GitHub' },
+      { value: 'portfolio', label: 'Portfolio' },
+      { value: 'other',     label: 'Other' },
+    ];
+
+    function addLinkRow(item) {
+      const root = $('#links-repeater');
+      const it = item || {};
+      const kind = LINK_KINDS.some(k => k.value === it.kind) ? it.kind : 'Other';
+      const row = document.createElement('div');
+      row.className = 'repeater__row';
+      row.innerHTML = `
+        <div class="field">
+          <label class="field__label">Kind</label>
+          <select data-k="kind">
+            ${LINK_KINDS.map(k =>
+              '<option value="' + k.value + '"' +
+              (k.value === kind ? ' selected' : '') + '>' + k.label + '</option>'
+            ).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label">URL</label>
+          <input type="url" data-k="url" value="${escapeHTML(it.url || '')}"
+                 placeholder="https://linkedin.com/in/…" />
+        </div>
+        <button type="button" class="repeater__remove" aria-label="Remove link">×</button>
+      `;
+      row.querySelectorAll('input, select').forEach(i => i.addEventListener('input', markDirty));
+      row.querySelector('.repeater__remove').addEventListener('click', () => {
+        row.remove();
+        markDirty();
+      });
+      root.appendChild(row);
+    }
+
+    function collectLinks() {
+      return $$('#links-repeater .repeater__row').map(r => ({
+        kind: r.querySelector('[data-k="kind"]').value,
+        url: r.querySelector('[data-k="url"]').value.trim(),
+      })).filter(x => x.url);
+    }
+
+    function renderExperience(items) {
+      const root = $('#exp-repeater');
+      root.innerHTML = '';
+      items.forEach((it) => addExperienceRow(it));
+    }
+
+    function addExperienceRow(item) {
+      const root = $('#exp-repeater');
+      const row = document.createElement('div');
+      row.className = 'repeater__row repeater__row--exp';
+      const it = item || {};
+      const bulletsText = Array.isArray(it.bullets)
+        ? it.bullets.join('\n')
+        : (it.bullets || '');
+      row.innerHTML = `
+        <div class="field">
+          <label class="field__label">Company</label>
+          <input type="text" data-k="company" value="${escapeHTML(it.company || '')}" />
+        </div>
+        <div class="field">
+          <label class="field__label">Role</label>
+          <input type="text" data-k="role" value="${escapeHTML(it.role || '')}" />
+        </div>
+        <div class="field">
+          <label class="field__label">Start</label>
+          <input type="text" data-k="start" value="${escapeHTML(it.start || '')}"
+                 placeholder="2022" />
+        </div>
+        <div class="field">
+          <label class="field__label">End</label>
+          <input type="text" data-k="end" value="${escapeHTML(it.end || '')}"
+                 placeholder="present" />
+        </div>
+        <div class="field" style="grid-column: 1 / -1;">
+          <label class="field__label">Bullets</label>
+          <textarea data-k="bullets" rows="2"
+                    placeholder="One per line">${escapeHTML(bulletsText)}</textarea>
+        </div>
+        <button type="button" class="repeater__remove" aria-label="Remove"
+                style="grid-column: 1 / -1;">× Remove role</button>
+      `;
+      row.querySelectorAll('input, textarea').forEach(i => i.addEventListener('input', markDirty));
+      row.querySelector('.repeater__remove').addEventListener('click', () => {
+        row.remove();
+        markDirty();
+      });
+      root.appendChild(row);
+    }
+
+    function collectExperience() {
+      return $$('#exp-repeater .repeater__row').map(r => {
+        const bullets = r.querySelector('[data-k="bullets"]').value
+          .split('\n').map(s => s.trim()).filter(Boolean);
+        return {
+          company: r.querySelector('[data-k="company"]').value.trim(),
+          role:    r.querySelector('[data-k="role"]').value.trim(),
+          start:   r.querySelector('[data-k="start"]').value.trim(),
+          end:     r.querySelector('[data-k="end"]').value.trim(),
+          bullets: bullets,
+        };
+      }).filter(x => x.company || x.role);
+    }
+
+    // Skills chip input
+    function renderSkills(items) {
+      const box = $('#skills-box');
+      $$('.chip', box).forEach(c => c.remove());
+      const input = $('#skills-input');
+      items.forEach(s => addChip(s));
+      box.appendChild(input);
+    }
+
+    function addChip(text) {
+      const box = $('#skills-box');
+      const input = $('#skills-input');
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML =
+        '<span>' + escapeHTML(text) + '</span>' +
+        '<button type="button" class="chip__remove" aria-label="Remove">×</button>';
+      chip.querySelector('.chip__remove').addEventListener('click', () => {
+        chip.remove();
+      });
+      box.insertBefore(chip, input);
+    }
+
+    function collectSkills() {
+      return $$('#skills-box .chip > span').map(s => s.textContent.trim()).filter(Boolean);
+    }
+
+    $('#skills-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const v = e.target.value.trim();
+        if (v) {
+          addChip(v);
+          e.target.value = '';
+        }
+      } else if (e.key === 'Backspace' && e.target.value === '') {
+        const chips = $$('#skills-box .chip');
+        if (chips.length) chips[chips.length - 1].remove();
+      }
+    });
+
+    // Repeater "add" buttons
+    $$('.repeater__add').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const kind = btn.dataset.add;
+        if (kind === 'links') addLinkRow({ kind: 'Other', url: '' });
+        else if (kind === 'experience') addExperienceRow({});
+      });
+    });
+
+    // ---------------------------------------------------------------------
+    // 5. Section C — CVs (upload, set default, delete)
+    // ---------------------------------------------------------------------
+
+    function renderCvs() {
+      const list = $('#cv-list');
+      list.innerHTML = '';
+      if (state.cvs.length === 0) {
+        return; // zone alone is enough
+      }
+      state.cvs.forEach(cv => list.appendChild(buildCvRow(cv)));
+    }
+
+    function buildCvRow(cv) {
+      const row = document.createElement('div');
+      row.className = 'cv-row';
+      row.dataset.cvId = cv.id;
+      const ext = (cv.filename || 'cv').split('.').pop().toUpperCase().slice(0, 4) || 'PDF';
+      const ts = cv.uploaded_at ? new Date(cv.uploaded_at).toLocaleString() : '';
+      const sizeTxt = cv.size_bytes ? fmtSize(cv.size_bytes) : '';
+      const isDefault = cv.id === state.defaultCvId;
+      row.innerHTML = `
+        <div class="cv-row__icon">${escapeHTML(ext)}</div>
+        <div style="flex: 1; min-width: 0;">
+          <div class="cv-row__name">${escapeHTML(cv.filename || 'Untitled')}</div>
+          <div class="cv-row__meta">${escapeHTML(sizeTxt)}${sizeTxt && ts ? ' · ' : ''}${escapeHTML(ts)}</div>
+        </div>
+        <div class="cv-row__actions">
+          ${isDefault
+            ? '<span class="cv-row__badge">Default</span>'
+            : '<button type="button" class="btn btn--sm" data-action="set-default">Set default</button>'}
+          <button type="button" class="btn btn--sm btn--danger" data-action="delete">Delete</button>
+        </div>
+      `;
+      const setBtn = row.querySelector('[data-action="set-default"]');
+      if (setBtn) setBtn.addEventListener('click', () => doSetDefaultCv(cv.id));
+      row.querySelector('[data-action="delete"]').addEventListener('click', () => doDeleteCv(cv));
+      return row;
+    }
+
+    function fmtSize(b) {
+      if (b < 1024) return b + ' B';
+      if (b < 1024 * 1024) return (b / 1024).toFixed(0) + ' KB';
+      return (b / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function wireCv() {
+      const zone = $('#cv-zone');
+      const file = $('#cv-file');
+      zone.addEventListener('click', () => file.click());
+      zone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); }
+      });
+      ['dragenter', 'dragover'].forEach(ev => {
+        zone.addEventListener(ev, (e) => {
+          e.preventDefault(); e.stopPropagation();
+          zone.classList.add('is-drag');
+        });
+      });
+      ['dragleave', 'drop'].forEach(ev => {
+        zone.addEventListener(ev, (e) => {
+          e.preventDefault(); e.stopPropagation();
+          zone.classList.remove('is-drag');
+        });
+      });
+      zone.addEventListener('drop', (e) => {
+        const f = e.dataTransfer.files[0];
+        if (f) doUpload(f);
+      });
+      file.addEventListener('change', () => {
+        if (file.files[0]) doUpload(file.files[0]);
+        file.value = '';
+      });
+    }
+
+    async function doUpload(f) {
+      const ext = (f.name.split('.').pop() || '').toLowerCase();
+      if (!['pdf', 'docx', 'doc'].includes(ext)) {
+        showToast('Only PDF, DOCX, or DOC allowed', true);
+        return;
+      }
+      if (f.size > 5 * 1024 * 1024) {
+        showToast('File is over 5 MB', true);
+        return;
+      }
+      const fd = new FormData();
+      fd.append('file', f);
+      try {
+        showToast('Uploading…');
+        await fetchJSON(
+          '/api/profiles/' + encodeURIComponent(PROFILE_ID) + '/cvs',
+          { method: 'POST', body: fd }
+        );
+        showToast('CV uploaded');
+        await refreshCvs();
+      } catch (e) {
+        showToast('Upload failed: ' + e.message, true);
+      }
+    }
+
+    async function doSetDefaultCv(cvId) {
+      try {
+        await fetchJSON(
+          '/api/profiles/' + encodeURIComponent(PROFILE_ID) +
+          '/cvs/' + encodeURIComponent(cvId) + '/default',
+          { method: 'POST' }
+        );
+        showToast('Default CV updated');
+        await refreshCvs();
+      } catch (e) {
+        showToast('Set default failed: ' + e.message, true);
+      }
+    }
+
+    async function doDeleteCv(cv) {
+      if (!confirm('Delete CV "' + (cv.filename || 'Untitled') + '"? This cannot be undone.')) {
+        return;
+      }
+      try {
+        await fetchJSON(
+          '/api/profiles/' + encodeURIComponent(PROFILE_ID) +
+          '/cvs/' + encodeURIComponent(cv.id),
+          { method: 'DELETE' }
+        );
+        showToast('CV deleted');
+        await refreshCvs();
+      } catch (e) {
+        showToast('Delete failed: ' + e.message, true);
+      }
+    }
+
+    async function refreshCvs() {
+      try {
+        const cvs = await fetchJSON(
+          '/api/profiles/' + encodeURIComponent(PROFILE_ID) + '/cvs'
+        );
+        state.cvs = cvs.items || [];
+        state.defaultCvId = cvs.default_id || '';
+        renderCvs();
+      } catch (e) {
+        // soft-fail — toast is enough
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // 6. Save
+    // ---------------------------------------------------------------------
+
+    async function doSave() {
+      const btn = $('#save-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      const payload = {
+        name: $('#name').value.trim(),
+        headline: $('#headline').value.trim(),
+        summary: $('#summary').value.trim(),
+        links: collectLinks(),
+        experience: collectExperience(),
+        skills: collectSkills(),
+      };
+      if (!payload.name) {
+        showToast('Name is required', true);
+        btn.disabled = false;
+        btn.textContent = 'Save';
+        return;
+      }
+      try {
+        const updated = await fetchJSON(
+          '/api/profiles/' + encodeURIComponent(PROFILE_ID),
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }
+        );
+        state.profile = updated;
+        $('#page-title').textContent = updated.name || 'Edit profile';
+        $('#default-badge').hidden = !updated.is_default;
+        btn.textContent = 'Save';
+        showToast('Saved');
+        btn.disabled = true;
+      } catch (e) {
+        showToast('Save failed: ' + e.message, true);
+        btn.disabled = false;
+        btn.textContent = 'Save';
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // Wire-up
+    // ---------------------------------------------------------------------
+
+    document.addEventListener('DOMContentLoaded', () => {
+      wireCv();
+      $('#save-btn').addEventListener('click', doSave);
+      boot();
+    });
+  })();
+  </script>
+</body>
+</html>
