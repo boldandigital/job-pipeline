@@ -25,6 +25,9 @@ import logging
 import os
 import sqlite3
 import subprocess
+import sys
+import time as _time
+import uuid as _uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -1248,3 +1251,448 @@ def api_me(request: Request):
         "plan": row["plan"] or "free",
         "created_at": row["created_at"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Phase 2.6 — Profile page + CV upload + guided tour + LinkedIn connector
+# ---------------------------------------------------------------------------
+
+from fastapi import File as _File, UploadFile as _UploadFile
+
+from src.db.users_db import (
+    CV_ALLOWED_EXTS,
+    CV_MAX_BYTES,
+    TOUR_TOTAL_STEPS,
+    clamp_tour_step,
+    clear_cv_upload,
+    get_profile,
+    set_cv_upload,
+    set_onboarding,
+    set_profile,
+)
+
+#: Per-user CV storage: data/users/<id>/cv/cv.<ext>
+CV_DIR_ROOT = PROJECT_ROOT / "data" / "users"
+
+
+def _cv_dir(uid: str) -> Path:
+    """Return (and create) the CV directory for a user."""
+    d = CV_DIR_ROOT / uid / "cv"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _profile_uid(request: Request) -> str:
+    """Resolve the acting user for the profile surface — always authenticated.
+
+    Uses _check_auth(), so BOTH the session cookie and the legacy HTTP-Basic
+    admin backdoor are accepted. _check_auth() also stamps request.state
+    .user_id for the Basic path, which is what makes
+    `curl -u lars:captain /api/profile` work.
+
+    There is deliberately NO fallback to the LARS_USER_ID env var here. Every
+    other endpoint in this app may use it because it runs behind a local
+    supervisor; this one mutates a person's PII and uploads files, so it
+    requires an actual credential. (The env var is attacker-influencable via
+    .env and would otherwise turn every request into an unauthenticated write.)
+    """
+    _require_auth(request)
+    uid = current_user_id(request) or getattr(request.state, "user_id", None)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Sign in to manage your profile")
+    return uid
+
+
+def _require_writable(uid: str) -> None:
+    """The bootstrap admin's profile is env-driven and read-only over HTTP."""
+    if uid == ADMIN_USER_ID:
+        raise HTTPException(
+            status_code=403,
+            detail="The self-host admin profile is read-only — edit config/ instead",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Page route
+# ---------------------------------------------------------------------------
+
+@app.get("/app/profile", response_class=HTMLResponse)
+def app_profile_page():
+    """The standalone Profile page (its own CSS/JS, no dashboard coupling)."""
+    page = STATIC_DIR / "profile.html"
+    if not page.exists():  # pragma: no cover — the file ships in the repo
+        return HTMLResponse(
+            "<h1>Profile unavailable</h1><p>web/static/profile.html is missing.</p>",
+            status_code=500,
+        )
+    return HTMLResponse(page.read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------------------
+# GET /api/profile
+# ---------------------------------------------------------------------------
+
+@app.get("/api/profile")
+def api_profile_get(request: Request):
+    """Return the caller's profile, plus the plan block the page renders."""
+    uid = _profile_uid(request)
+    from src.billing import quota as _quota
+    profile = get_profile(uid)
+    if not profile:
+        raise HTTPException(status_code=404, detail="profile not found")
+    plan = profile.get("plan") or "free"
+    if profile.get("is_admin"):
+        plan = "admin"
+    try:
+        limits = _quota.get_plan_limits(plan)
+    except Exception:  # quota is advisory here — never block the page on it
+        limits = {}
+    profile["tour_pending"] = _tour_pending(uid, profile)
+    profile["plan"] = plan
+    profile["plan_limits"] = limits
+    return profile
+
+
+def _tour_pending(uid: str, profile: dict) -> bool:
+    """Whether the first-run tour should fire. Admin is never toured."""
+    if profile.get("is_admin"):
+        return False
+    return not bool(profile.get("onboarding_complete"))
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/profile
+# ---------------------------------------------------------------------------
+
+class ProfileUpdate(BaseModel):
+    """Body of PUT /api/profile. Only these fields are writable — email,
+    password_hash, plan and verified are owned by the auth/billing flows."""
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    headline: Optional[str] = None
+    summary: Optional[str] = None
+    links: Optional[List[Dict[str, Any]]] = None
+    experience: Optional[List[Dict[str, Any]]] = None
+    skills: Optional[List[str]] = None
+
+
+@app.put("/api/profile")
+def api_profile_put(request: Request, body: ProfileUpdate):
+    """Write the caller's profile fields. Admin → 403."""
+    uid = _profile_uid(request)
+    _require_writable(uid)
+    fields = body.model_dump(exclude_unset=True)
+    wrote = set_profile(uid, fields)
+    if fields and not wrote:
+        raise HTTPException(status_code=404, detail="profile not found")
+    return get_profile(uid)
+
+
+# ---------------------------------------------------------------------------
+# CV upload / serve / delete
+# ---------------------------------------------------------------------------
+
+#: Content types we serve back, keyed by extension.
+_CV_MEDIA_TYPES = {
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+
+def _cv_file_for(uid: str) -> Optional[Path]:
+    """Resolve the caller's stored CV on disk, or None.
+
+    Re-derives the path from the user's OWN cv directory rather than trusting
+    the stored string, and asserts the resolved path is still inside it — a
+    stored value can never be used to read a file elsewhere.
+    """
+    profile = get_profile(uid)
+    stored = (profile.get("cv_upload_path") or "").strip()
+    if not stored:
+        return None
+    cv_dir = _cv_dir(uid).resolve()
+    candidate = (PROJECT_ROOT / stored).resolve() if not stored.startswith("/") \
+        else Path(stored).resolve()
+    if not str(candidate).startswith(str(cv_dir)):
+        log.warning("cv path %r escapes %s — refusing", stored, cv_dir)
+        return None
+    if candidate.is_file():
+        return candidate
+    return None
+
+
+@app.post("/api/profile/cv")
+async def api_profile_cv_upload(request: Request, file: _UploadFile = _File(...)):
+    """Upload (or replace) the caller's CV. PDF or DOCX, 5 MB max."""
+    uid = _profile_uid(request)
+    _require_writable(uid)
+
+    filename = (file.filename or "").strip()
+    if not filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in CV_ALLOWED_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{ext or filename}'. "
+                   f"Allowed: {', '.join('.' + e for e in CV_ALLOWED_EXTS)}",
+        )
+
+    # Streamed with a hard ceiling so a huge upload cannot exhaust memory
+    # before we get a chance to reject it.
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(64 * 1024):
+        total += len(chunk)
+        if total > CV_MAX_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"CV is larger than the {CV_MAX_BYTES // (1024*1024)} MB limit",
+            )
+        chunks.append(chunk)
+    if total == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    cv_dir = _cv_dir(uid)
+    target = cv_dir / f"cv.{ext}"
+    # A previous PDF must not survive a DOCX upload and keep being served.
+    for stale in cv_dir.glob("cv.*"):
+        if stale != target:
+            stale.unlink(missing_ok=True)
+    target.write_bytes(b"".join(chunks))
+
+    uploaded_at = set_cv_upload(uid, str(target.relative_to(PROJECT_ROOT)))
+    if uploaded_at is None:  # row vanished between auth and write
+        target.unlink(missing_ok=True)
+        raise HTTPException(status_code=404, detail="profile not found")
+    return {
+        "ok": True,
+        "filename": filename,
+        "path": str(target.relative_to(PROJECT_ROOT)),
+        "uploaded_at": uploaded_at,
+        "size": total,
+    }
+
+
+@app.get("/api/profile/cv")
+def api_profile_cv_get(request: Request):
+    """Serve the caller's stored CV (or 404)."""
+    uid = _profile_uid(request)
+    path = _cv_file_for(uid)
+    if path is None:
+        raise HTTPException(status_code=404, detail="no CV uploaded")
+    return FileResponse(
+        str(path),
+        media_type=_CV_MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream"),
+        filename=path.name,
+    )
+
+
+@app.get("/api/profile/cv/meta")
+def api_profile_cv_meta(request: Request):
+    """Metadata only — name, size, upload time. Never the bytes."""
+    uid = _profile_uid(request)
+    profile = get_profile(uid)
+    path = _cv_file_for(uid)
+    return {
+        "has_cv": path is not None,
+        "filename": path.name if path else "",
+        "path": profile.get("cv_upload_path") or "",
+        "uploaded_at": profile.get("cv_uploaded_at") or "",
+        "size": path.stat().st_size if path else 0,
+    }
+
+
+@app.delete("/api/profile/cv")
+def api_profile_cv_delete(request: Request):
+    """Delete the caller's CV file and forget the pointer."""
+    uid = _profile_uid(request)
+    _require_writable(uid)
+    removed: list[str] = []
+    for stale in _cv_dir(uid).glob("cv.*"):
+        removed.append(stale.name)
+        stale.unlink(missing_ok=True)
+    clear_cv_upload(uid)
+    return {"ok": True, "removed": removed}
+
+
+# ---------------------------------------------------------------------------
+# Guided tour state
+# ---------------------------------------------------------------------------
+
+class OnboardingUpdate(BaseModel):
+    complete: bool
+    step: Optional[int] = None
+
+
+@app.get("/api/profile/onboarding")
+def api_onboarding_get(request: Request):
+    """Whether the dashboard tour should fire for the caller."""
+    uid = _profile_uid(request)
+    profile = get_profile(uid)
+    return {
+        "onboarding_complete": bool(profile.get("onboarding_complete")),
+        "onboarding_step": clamp_tour_step(profile.get("onboarding_step")),
+        "total_steps": TOUR_TOTAL_STEPS,
+        "tour_pending": _tour_pending(uid, profile),
+    }
+
+
+@app.post("/api/profile/onboarding")
+def api_onboarding_post(request: Request, body: OnboardingUpdate):
+    """Persist tour progress. Called on step change and on dismissal."""
+    uid = _profile_uid(request)
+    _require_writable(uid)
+    if body.step is None:
+        # Omitting `step` means "complete the tour", not "reset progress".
+        # Completing must never erase the step the tour actually reached.
+        body.step = TOUR_TOTAL_STEPS
+    step = clamp_tour_step(body.step)
+    if not set_onboarding(uid, complete=body.complete, step=step):
+        raise HTTPException(status_code=404, detail="profile not found")
+    return {
+        "ok": True,
+        "onboarding_complete": bool(body.complete),
+        "onboarding_step": step,
+        "total_steps": TOUR_TOTAL_STEPS,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Connectors (LinkedIn / XING / Indeed / Workday)
+# ---------------------------------------------------------------------------
+#
+# Status is derived from the REAL encrypted credential vault
+# (src/auth/credentials.py), which is where captainauth_capture.py stores
+# cookies. Nothing here invents a sidecar JSON file: a connector reads as
+# "connected" only when a decryptable credential for that platform exists.
+
+CONNECTOR_PLATFORMS = ("linkedin", "xing", "indeed", "workday")
+
+#: Capture subprocesses started from this process, keyed by job id. Kept in
+#: memory only — a capture is a user-present, single-machine action, and
+#: correctness across restarts comes from the vault, not this dict.
+_CAPTURE_JOBS: dict[str, dict[str, Any]] = {}
+_CAPTURE_SCRIPT = PROJECT_ROOT / "bin" / "captainauth_capture.py"
+
+
+def _connector_state(uid: str, platform: str) -> dict[str, Any]:
+    """'connected' only when a real, readable credential exists for it."""
+    connected = False
+    detail = ""
+    try:
+        from ..auth.credentials import (
+            CredentialNotFoundError,
+            CredentialStore,
+            CredentialsError,
+        )
+        status = CredentialStore().status(uid)
+        if status.get("platforms"):
+            connected = any(p.get("platform") == platform for p in status["platforms"])
+        elif not status.get("profile_exists"):
+            detail = "no credential profile yet"
+    except CredentialsError as exc:
+        # An unreadable vault must never read as "disconnected" — that would
+        # push the user to reconnect and overwrite good credentials.
+        detail = "vault unreadable — run bin/captainauth show"
+        log.warning("connector status for %s/%s failed: %s", uid, platform, exc)
+    except Exception as exc:  # pragma: no cover — defensive
+        detail = "status unavailable"
+        log.warning("connector status error %s/%s: %s", uid, platform, exc)
+
+    job = next(
+        (j for j in _CAPTURE_JOBS.values()
+         if j["platform"] == platform and j["user_id"] == uid
+         and j["status"] == "running"),
+        None,
+    )
+    return {
+        "platform": platform,
+        "status": "connecting" if job else ("connected" if connected else "disconnected"),
+        "job_id": job["job_id"] if job else None,
+        "detail": detail,
+    }
+
+
+@app.get("/api/connectors")
+def api_connectors(request: Request):
+    """Status for every connector the apply channels need."""
+    uid = _profile_uid(request)
+    return {
+        "user_id": uid,
+        "connectors": [_connector_state(uid, p) for p in CONNECTOR_PLATFORMS],
+    }
+
+
+@app.post("/api/connectors/{platform}/connect")
+def api_connector_connect(request: Request, platform: str):
+    """Launch the browser capture for a platform in the background.
+
+    Spawns ``bin/captainauth_capture.py <platform> <user_id>``, which opens a
+    real Chromium window for the user to sign in and then writes the cookies
+    into the encrypted vault. The UI polls GET /api/connectors.
+    """
+    uid = _profile_uid(request)
+    plat = platform.strip().lower()
+    if plat not in CONNECTOR_PLATFORMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unknown platform '{platform}'. Known: {', '.join(CONNECTOR_PLATFORMS)}",
+        )
+    if not _CAPTURE_SCRIPT.exists():
+        raise HTTPException(
+            status_code=501,
+            detail="capture helper bin/captainauth_capture.py is not installed",
+        )
+    # One capture per user+platform at a time; a second click would race the
+    # same vault file.
+    for job in _CAPTURE_JOBS.values():
+        if job["user_id"] == uid and job["platform"] == plat and job["status"] == "running":
+            return {"ok": True, "job_id": job["job_id"], "platform": plat,
+                    "status": "connecting"}
+
+    job_id = _uuid.uuid4().hex[:12]
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, str(_CAPTURE_SCRIPT), plat, uid],
+            cwd=str(PROJECT_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"could not start capture: {exc}")
+
+    _CAPTURE_JOBS[job_id] = {
+        "job_id": job_id,
+        "platform": plat,
+        "user_id": uid,
+        "status": "running",
+        "pid": proc.pid,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "_proc": proc,
+    }
+    return {"ok": True, "job_id": job_id, "platform": plat, "status": "connecting"}
+
+
+@app.delete("/api/connectors/{platform}")
+def api_connector_disconnect(request: Request, platform: str):
+    """Delete the stored credential for a platform."""
+    uid = _profile_uid(request)
+    plat = platform.strip().lower()
+    if plat not in CONNECTOR_PLATFORMS:
+        raise HTTPException(status_code=400, detail=f"unknown platform '{platform}'")
+    from ..auth.credentials import (
+        CredentialNotFoundError,
+        CredentialStore,
+        CredentialsError,
+        NoSuchUserError,
+    )
+    try:
+        CredentialStore().delete(uid, plat)
+    except CredentialNotFoundError:
+        raise HTTPException(status_code=404, detail=f"no {plat} credential stored")
+    except (NoSuchUserError, CredentialsError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"ok": True, "platform": plat, "status": "disconnected"}

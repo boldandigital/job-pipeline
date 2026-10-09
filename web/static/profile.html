@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Profile · CaptainApply</title>
+  <meta name="description" content="Manage your CaptainApply profile: personal details, experience, skills, plan, and CV." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2306b6d4'/><text x='16' y='22' text-anchor='middle' font-size='18' font-family='Inter,sans-serif' font-weight='700' fill='white'>⚓</text></svg>" />
+  <style>
+    /* ======================================================================
+       Profile page — own styles, no shared CSS with the dashboard.
+       Same visual language (Inter / Inter Tight / JetBrains Mono) so the
+       two pages feel like siblings without us having to extract a shared
+       stylesheet (which would be its own Phase).
+       ====================================================================== */
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: #F8FAFC;
+      color: #0F172A;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+    a { color: #0EA5E9; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ---------- Top bar ---------- */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: saturate(180%) blur(12px);
+      border-bottom: 1px solid #E2E8F0;
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .topbar__back {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: #475569; font-size: 14px; font-weight: 500;
+    }
+    .topbar__back:hover { color: #0F172A; text-decoration: none; }
+    .topbar__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700; font-size: 20px; letter-spacing: -0.01em;
+      margin: 0; flex: 1;
+    }
+    .topbar__spacer { flex: 1; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px; border: 1px solid #E2E8F0;
+      background: #fff; color: #0F172A; font-size: 14px; font-weight: 500;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    }
+    .btn:hover { background: #F1F5F9; border-color: #CBD5E1; }
+    .btn--primary {
+      background: #0F172A; color: #fff; border-color: #0F172A;
+    }
+    .btn--primary:hover { background: #1E293B; border-color: #1E293B; }
+    .btn--danger {
+      background: #fff; color: #DC2626; border-color: #FECACA;
+    }
+    .btn--danger:hover { background: #FEF2F2; border-color: #FCA5A5; }
+    .btn--sm { padding: 5px 10px; font-size: 12px; }
+    .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+    /* ---------- Page layout ---------- */
+    .page {
+      max-width: 880px; margin: 0 auto; padding: 32px 24px 96px;
+    }
+    .page__intro {
+      margin: 8px 0 32px;
+      color: #475569; font-size: 15px;
+    }
+
+    /* ---------- Section card ---------- */
+    .section {
+      background: #fff; border: 1px solid #E2E8F0; border-radius: 14px;
+      padding: 28px 28px 24px; margin-bottom: 20px;
+      box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+    }
+    .section__head {
+      display: flex; align-items: baseline; gap: 12px;
+      margin-bottom: 18px;
+    }
+    .section__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700; font-size: 17px; margin: 0; letter-spacing: -0.01em;
+    }
+    .section__sub {
+      color: #64748B; font-size: 13px; margin: 0;
+    }
+
+    /* ---------- Form fields ---------- */
+    .field { margin-bottom: 16px; }
+    .field__label {
+      display: block; font-size: 12px; font-weight: 600;
+      color: #475569; text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+    .field__hint {
+      font-size: 12px; color: #94A3B8; margin-top: 4px;
+    }
+    .field input[type="text"],
+    .field input[type="email"],
+    .field input[type="tel"],
+    .field input[type="url"],
+    .field textarea,
+    .field select {
+      width: 100%;
+      font: inherit; font-size: 14px;
+      padding: 9px 12px; border: 1px solid #CBD5E1; border-radius: 8px;
+      background: #fff; color: #0F172A;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .field input:focus,
+    .field textarea:focus,
+    .field select:focus {
+      outline: none;
+      border-color: #0EA5E9;
+      box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+    }
+    .field input[readonly] { background: #F8FAFC; color: #475569; }
+    .field textarea { min-height: 96px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+
+    /* ---------- Repeater (links, experience) ---------- */
+    .repeater { display: flex; flex-direction: column; gap: 12px; }
+    .repeater__row {
+      border: 1px solid #E2E8F0; border-radius: 10px;
+      padding: 14px; background: #FCFDFE;
+      display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px;
+    }
+    .repeater__row--exp {
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+    }
+    .repeater__row .field { margin-bottom: 0; }
+    .repeater__remove {
+      align-self: start; margin-top: 22px;
+      background: none; border: 1px solid #FECACA; color: #DC2626;
+      border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 12px;
+    }
+    .repeater__remove:hover { background: #FEF2F2; }
+    .repeater__add {
+      align-self: flex-start;
+      background: #F1F5F9; border: 1px dashed #CBD5E1; color: #475569;
+      border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer;
+    }
+    .repeater__add:hover { background: #E2E8F0; color: #0F172A; }
+
+    /* Experience rows stack on small screens */
+    @media (max-width: 720px) {
+      .repeater__row, .repeater__row--exp { grid-template-columns: 1fr 1fr; }
+      .repeater__remove { grid-column: 1 / -1; margin-top: 0; }
+    }
+
+    /* ---------- Skills chip input ---------- */
+    .chip-input { position: relative; }
+    .chip-input__box {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px 8px;
+      background: #fff; min-height: 42px;
+    }
+    .chip-input__box:focus-within {
+      border-color: #0EA5E9; box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #E0F2FE; color: #0369A1; padding: 3px 8px;
+      border-radius: 999px; font-size: 12px; font-weight: 500;
+    }
+    .chip__remove {
+      cursor: pointer; font-weight: 700; padding: 0 2px; line-height: 1;
+      color: #0369A1; opacity: 0.6; background: none; border: none;
+    }
+    .chip__remove:hover { opacity: 1; }
+    .chip-input__input {
+      flex: 1; min-width: 100px; border: none; outline: none;
+      font: inherit; font-size: 14px; padding: 4px 0; background: transparent;
+    }
+
+    /* ---------- Plan card ---------- */
+    .plan-card {
+      display: flex; align-items: center; gap: 16px;
+      padding: 16px 18px; border-radius: 10px;
+      background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+      color: #fff;
+    }
+    .plan-card__tier {
+      font-family: 'Inter Tight', sans-serif;
+      font-size: 18px; font-weight: 700; letter-spacing: 0.01em;
+    }
+    .plan-card__sub {
+      color: #94A3B8; font-size: 13px; margin-top: 2px;
+    }
+    .plan-card__badge {
+      display: inline-block; background: rgba(16,185,129,0.2);
+      color: #34D399; padding: 2px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: 6px;
+    }
+
+    /* ---------- CV upload ---------- */
+    .cv-zone {
+      border: 2px dashed #CBD5E1; border-radius: 12px;
+      padding: 28px 20px; text-align: center; cursor: pointer;
+      background: #FCFDFE; transition: background 0.15s, border-color 0.15s;
+    }
+    .cv-zone:hover, .cv-zone.is-drag {
+      background: #F0F9FF; border-color: #0EA5E9;
+    }
+    .cv-zone__icon { font-size: 32px; line-height: 1; margin-bottom: 6px; }
+    .cv-zone__hint { color: #64748B; font-size: 13px; margin-top: 4px; }
+    .cv-zone__button {
+      display: inline-block; background: #0F172A; color: #fff;
+      padding: 8px 16px; border-radius: 8px; font-size: 13px;
+      font-weight: 500; margin-top: 12px;
+    }
+    .cv-current {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 16px; border: 1px solid #E2E8F0;
+      border-radius: 10px; background: #F8FAFC;
+    }
+    .cv-current__icon {
+      width: 40px; height: 40px; background: #FEE2E2; color: #DC2626;
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 700;
+    }
+    .cv-current__name {
+      font-weight: 600; font-size: 14px; word-break: break-all;
+    }
+    .cv-current__meta { color: #64748B; font-size: 12px; margin-top: 2px; }
+    .cv-current__actions { margin-left: auto; display: flex; gap: 8px; }
+
+    /* ---------- Toast ---------- */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: #0F172A; color: #fff;
+      padding: 10px 18px; border-radius: 8px; font-size: 14px;
+      font-weight: 500; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s; z-index: 1000;
+    }
+    .toast.is-show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast--err { background: #DC2626; }
+
+    /* ---------- Connectors (LinkedIn + friends) ---------- */
+    .connectors {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+    @media (max-width: 640px) { .connectors { grid-template-columns: 1fr; } }
+    .connector {
+      border: 1px solid #E2E8F0; border-radius: 10px;
+      padding: 14px; background: #FCFDFE;
+    }
+    .connector__head {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .connector__logo {
+      width: 28px; height: 28px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: #fff;
+    }
+    .connector__name { font-weight: 600; font-size: 14px; }
+    .connector__status {
+      display: inline-block; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 2px 8px; border-radius: 999px;
+    }
+    .connector__status--connected { background: #D1FAE5; color: #047857; }
+    .connector__status--disconnected { background: #F1F5F9; color: #64748B; }
+    .connector__status--connecting { background: #FEF3C7; color: #B45309; }
+    .connector__action { margin-top: 10px; }
+
+    /* ---------- Modal (capture child) ---------- */
+    .modal {
+      position: fixed; inset: 0; background: rgba(15,23,42,0.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 20px;
+    }
+    .modal[hidden] { display: none; }
+    .modal__card {
+      background: #fff; border-radius: 14px; padding: 28px;
+      max-width: 480px; width: 100%;
+      box-shadow: 0 20px 40px rgba(15,23,42,0.2);
+    }
+    .modal__title {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700; font-size: 18px; margin: 0 0 8px;
+    }
+    .modal__body { color: #475569; font-size: 14px; line-height: 1.6; }
+    .modal__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+    /* ---------- Loading skeleton ---------- */
+    .skeleton {
+      background: linear-gradient(90deg, #F1F5F9 0%, #E2E8F0 50%, #F1F5F9 100%);
+      background-size: 200% 100%;
+      animation: skel 1.4s ease-in-out infinite;
+      border-radius: 6px; height: 14px;
+    }
+    @keyframes skel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+
+  <!-- ===========================================
+       TOP BAR
+       =========================================== -->
+  <header class="topbar">
+    <a class="topbar__back" href="/app/" id="back-link">← Back to dashboard</a>
+    <h1 class="topbar__title">Profile</h1>
+    <button type="button" class="btn btn--primary" id="save-btn" disabled>Save</button>
+  </header>
+
+  <main class="page">
+
+    <p class="page__intro" id="page-intro">
+      Your profile is the single source of truth for every CV, cover letter, and
+      application we generate. Update it once — every job picks it up.
+    </p>
+
+    <!-- ===========================================
+         SECTION A: PERSONAL
+         =========================================== -->
+    <section class="section" aria-labelledby="sec-personal">
+      <div class="section__head">
+        <h2 class="section__title" id="sec-personal">Personal</h2>
+        <p class="section__sub">Name, contact, headline, summary</p>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label class="field__label" for="name">Display name</label>
+          <input type="text" id="name" name="name" autocomplete="name" />
+        </div>
+        <div class="field">
+          <label class="field__label" for="email">Email</label>
+          <input type="email" id="email" name="email" readonly disabled
+                 title="Email is tied to your account" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label class="field__label" for="phone">Phone</label>
+          <input type="tel" id="phone" name="phone" autocomplete="tel" />
+        </div>
+        <div class="field">
+          <label class="field__label" for="location">Location</label>
+          <input type="text" id="location" name="location"
+                 placeholder="City, Country" autocomplete="address-level2" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="headline">Headline</label>
+        <input type="text" id="headline" name="headline"
+               placeholder="Senior Engineering Manager · 12+ yrs" />
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="summary">Summary</label>
+        <textarea id="summary" name="summary" rows="5"
+                  placeholder="A 3-5 sentence pitch that introduces you to a recruiter."></textarea>
+        <div class="field__hint">Used as the opening paragraph on every CV + cover letter.</div>
+      </div>
+
+      <h3 class="section__title" style="font-size: 14px; margin-top: 24px;">Links</h3>
+      <div class="repeater" id="links-repeater" data-kind="links"></div>
+      <button type="button" class="repeater__add" data-add="links">+ Add link</button>
+      <div class="field__hint">Kinds are used to label the link on your CV.</div>
+    </section>
+
+    <!-- ===========================================
+         SECTION B: EXPERIENCE & SKILLS
+         =========================================== -->
+    <section class="section" aria-labelledby="sec-experience">
+      <div class="section__head">
+        <h2 class="section__title" id="sec-experience">Experience &amp; Skills</h2>
+        <p class="section__sub">Roles you've held + the skills you bring</p>
+      </div>
+
+      <h3 class="section__title" style="font-size: 14px; margin-top: 0;">Experience</h3>
+      <div class="repeater" id="exp-repeater" data-kind="experience"></div>
+      <button type="button" class="repeater__add" data-add="experience">+ Add role</button>
+
+      <h3 class="section__title" style="font-size: 14px; margin-top: 24px;">Skills</h3>
+      <div class="chip-input">
+        <div class="chip-input__box" id="skills-box">
+          <input type="text" class="chip-input__input" id="skills-input"
+                 placeholder="Type a skill and press Enter (e.g. Python)" />
+        </div>
+        <div class="field__hint">These are matched against job descriptions when scoring roles.</div>
+      </div>
+    </section>
+
+    <!-- ===========================================
+         SECTION C: PLAN & CV
+         =========================================== -->
+    <section class="section" aria-labelledby="sec-plan">
+      <div class="section__head">
+        <h2 class="section__title" id="sec-plan">Plan &amp; CV</h2>
+        <p class="section__sub">Your tier + the source CV for every apply</p>
+      </div>
+
+      <div class="plan-card" id="plan-card">
+        <div style="flex: 1;">
+          <div class="plan-card__badge" id="plan-badge">—</div>
+          <div class="plan-card__tier" id="plan-tier">Loading…</div>
+          <div class="plan-card__sub" id="plan-sub">—</div>
+        </div>
+      </div>
+
+      <h3 class="section__title" style="font-size: 14px; margin: 24px 0 12px;">CV</h3>
+
+      <!-- CV current (shown if has_cv) -->
+      <div id="cv-current-wrap" hidden>
+        <div class="cv-current">
+          <div class="cv-current__icon" id="cv-icon">PDF</div>
+          <div>
+            <div class="cv-current__name" id="cv-name">—</div>
+            <div class="cv-current__meta" id="cv-meta">—</div>
+          </div>
+          <div class="cv-current__actions">
+            <button type="button" class="btn btn--sm btn--danger" id="cv-delete">Delete</button>
+            <button type="button" class="btn btn--sm" id="cv-replace">Replace</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CV upload zone (shown if no CV) -->
+      <div id="cv-zone" class="cv-zone" role="button" tabindex="0"
+           aria-label="Upload CV — drop file or click to browse">
+        <div class="cv-zone__icon">📄</div>
+        <div><strong>Drop your CV here</strong> or click to browse</div>
+        <div class="cv-zone__hint">PDF, DOCX, or DOC · max 5 MB</div>
+        <div class="cv-zone__button">Choose file</div>
+        <input type="file" id="cv-file" accept=".pdf,.docx,.doc"
+               style="display: none;" />
+      </div>
+    </section>
+
+    <!-- ===========================================
+         SECTION D: CONNECTORS
+         =========================================== -->
+    <section class="section" aria-labelledby="sec-connectors">
+      <div class="section__head">
+        <h2 class="section__title" id="sec-connectors">Connectors</h2>
+        <p class="section__sub">
+          Connect job platforms so we can apply on your behalf.
+          A short browser session captures your cookies — never your password.
+        </p>
+      </div>
+      <div class="connectors" id="connectors-grid">
+        <!-- connector cards rendered by JS -->
+        <div class="skeleton" style="height: 80px;"></div>
+        <div class="skeleton" style="height: 80px;"></div>
+        <div class="skeleton" style="height: 80px;"></div>
+        <div class="skeleton" style="height: 80px;"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast (Saved / errors) -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <!-- Connector capture child modal -->
+  <div class="modal" id="capture-modal" hidden>
+    <div class="modal__card">
+      <h2 class="modal__title" id="capture-modal-title">Connect platform</h2>
+      <p class="modal__body" id="capture-modal-body">
+        We're opening a browser to capture your session cookies. Sign in normally,
+        then close the browser window — we'll detect the cookies and finish setup.
+      </p>
+      <div class="modal__actions">
+        <button type="button" class="btn" id="capture-cancel">Cancel</button>
+        <button type="button" class="btn btn--primary" id="capture-continue">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /* =========================================================================
+     Profile page — own JS, no shared scripts with the dashboard.
+     Sections:
+       1. State + helpers
+       2. Boot: load profile + CV + connectors in parallel
+       3. Section A: Personal (simple two-way binding)
+       4. Section B: Repeaters (links, experience) + skills chip input
+       5. Section C: CV upload (drag-drop + picker)
+       6. Section D: Connectors (LinkedIn + friends) — child modal + polling
+       7. Save: PUT /api/profile
+     ========================================================================= */
+  (function () {
+    'use strict';
+
+    // ---------------------------------------------------------------------
+    // 1. State + helpers
+    // ---------------------------------------------------------------------
+
+    const state = {
+      profile: null,
+      isAdmin: false,
+      cv: { has_cv: false },
+      connectors: [],
+      _saveTimer: null,
+      _pollHandles: new Map(), // platform → interval id
+    };
+
+    function $(sel, root) { return (root || document).querySelector(sel); }
+    function $$(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
+
+    function showToast(msg, isErr) {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.classList.toggle('toast--err', !!isErr);
+      t.classList.add('is-show');
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => t.classList.remove('is-show'), 2400);
+    }
+
+    function escapeHTML(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    async function fetchJSON(url, opts) {
+      const r = await fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}));
+      if (!r.ok) {
+        let detail = '';
+        try { detail = (await r.json()).detail || ''; } catch (e) {}
+        throw new Error(detail || ('HTTP ' + r.status));
+      }
+      return r.json();
+    }
+
+    // ---------------------------------------------------------------------
+    // 2. Boot
+    // ---------------------------------------------------------------------
+
+    async function boot() {
+      try {
+        // Load everything in parallel. Each loader renders into its own
+        // region; if one fails the others still populate.
+        const [prof, conns] = await Promise.all([
+          fetchJSON('/api/profile').catch(err => { console.warn('profile load failed', err); return null; }),
+          fetchJSON('/api/connectors').catch(err => { console.warn('connectors load failed', err); return null; }),
+        ]);
+        if (prof) renderProfile(prof);
+        if (conns) renderConnectors(conns);
+        await refreshCv();
+        if (!prof) showToast('Could not load profile', true);
+      } catch (e) {
+        showToast('Network error: ' + e.message, true);
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // 3. Section A: Personal — two-way binding into state.profile
+    // ---------------------------------------------------------------------
+
+    function renderProfile(p) {
+      state.profile = p;
+      state.isAdmin = !!p.is_admin;
+
+      $('#name').value = p.name || '';
+      $('#email').value = p.email || '';
+      $('#phone').value = p.phone || '';
+      $('#location').value = p.location || '';
+      $('#headline').value = p.headline || '';
+      $('#summary').value = p.summary || '';
+
+      // Plan
+      $('#plan-badge').textContent = (p.plan || 'free').toUpperCase();
+      $('#plan-tier').textContent = p.plan || '—';
+      $('#plan-sub').textContent = state.isAdmin
+        ? 'Self-host · bootstrap admin'
+        : 'Manage your subscription in Settings → Billing';
+
+      // Repeaters
+      renderLinks(p.links || []);
+      renderExperience(p.experience || []);
+      renderSkills(p.skills || []);
+
+      // Admin: lock everything (read-only)
+      if (state.isAdmin) {
+        $$('input, textarea, select, button.repeater__add, button.repeater__remove')
+          .forEach(el => {
+            if (el.id === 'save-btn' || el.id === 'back-link' || el.id === 'cv-delete') return;
+            if (el.classList.contains('chip-input__input')) return;
+            el.disabled = true;
+          });
+        $('#save-btn').disabled = true;
+        $('#page-intro').textContent =
+          'Admin profile is read-only — edit .env (LARS_NAME, LARS_EMAIL) to change it.';
+      } else {
+        enableSaveOnEdit();
+      }
+    }
+
+    function enableSaveOnEdit() {
+      // Listen on every editable field; mark the save button enabled when
+      // any value differs from the loaded state.
+      const fields = ['name', 'phone', 'location', 'headline', 'summary'];
+      fields.forEach(id => {
+        const el = $('#' + id);
+        if (!el) return;
+        el.addEventListener('input', markDirty);
+      });
+    }
+
+    function markDirty() {
+      if (state.isAdmin) return;
+      $('#save-btn').disabled = false;
+    }
+
+    // ---------------------------------------------------------------------
+    // 4. Section B: Repeaters + skills chip input
+    // ---------------------------------------------------------------------
+
+    function renderLinks(items) {
+      const root = $('#links-repeater');
+      root.innerHTML = '';
+      items.forEach((it) => addLinkRow(it));
+    }
+
+    // Link kinds are a fixed catalog (matches src/db/users_db.LINK_KINDS).
+    const LINK_KINDS = [
+      { value: 'linkedin', label: 'LinkedIn' },
+      { value: 'github', label: 'GitHub' },
+      { value: 'portfolio', label: 'Portfolio' },
+      { value: 'other', label: 'Other' },
+    ];
+
+    function addLinkRow(item) {
+      const root = $('#links-repeater');
+      const it = item || {};
+      const kind = LINK_KINDS.some(k => k.value === it.kind) ? it.kind : 'other';
+      const row = document.createElement('div');
+      row.className = 'repeater__row';
+      // Values are escaped: `it.url` is user-supplied profile data and must
+      // never be able to break out of the attribute and inject markup.
+      row.innerHTML = `
+        <div class="field">
+          <label class="field__label">Kind</label>
+          <select data-k="kind">
+            ${LINK_KINDS.map(k =>
+              `<option value="${k.value}"${k.value === kind ? ' selected' : ''}>${k.label}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label">URL</label>
+          <input type="url" data-k="url" value="${escapeHTML(it.url || '')}"
+                 placeholder="https://linkedin.com/in/…" />
+        </div>
+        <button type="button" class="repeater__remove" aria-label="Remove link">×</button>
+      `;
+      row.querySelectorAll('input, select').forEach(i => i.addEventListener('input', markDirty));
+      row.querySelector('.repeater__remove').addEventListener('click', () => {
+        row.remove();
+        markDirty();
+      });
+      root.appendChild(row);
+    }
+
+    function collectLinks() {
+      return $$('#links-repeater .repeater__row').map(r => ({
+        kind: r.querySelector('[data-k="kind"]').value,
+        url: r.querySelector('[data-k="url"]').value.trim(),
+      })).filter(x => x.url);
+    }
+
+    function renderExperience(items) {
+      const root = $('#exp-repeater');
+      root.innerHTML = '';
+      items.forEach((it, i) => addExperienceRow(it, i));
+    }
+
+    function addExperienceRow(item, idx) {
+      const root = $('#exp-repeater');
+      const row = document.createElement('div');
+      row.className = 'repeater__row repeater__row--exp';
+      row.dataset.idx = idx == null ? root.children.length : idx;
+      const it = item || {};
+      row.innerHTML = `
+        <div class="field">
+          <label class="field__label">Company</label>
+          <input type="text" data-k="company" value="${escapeHTML(it.company || '')}" />
+        </div>
+        <div class="field">
+          <label class="field__label">Role</label>
+          <input type="text" data-k="role" value="${escapeHTML(it.role || '')}" />
+        </div>
+        <div class="field">
+          <label class="field__label">Start</label>
+          <input type="text" data-k="start" value="${escapeHTML(it.start || '')}"
+                 placeholder="2022" />
+        </div>
+        <div class="field">
+          <label class="field__label">End</label>
+          <input type="text" data-k="end" value="${escapeHTML(it.end || '')}"
+                 placeholder="present" />
+        </div>
+        <div class="field" style="grid-column: 1 / -1;">
+          <label class="field__label">Bullets</label>
+          <textarea data-k="bullets" rows="2"
+                    placeholder="One per line">${escapeHTML(it.bullets || '')}</textarea>
+        </div>
+        <button type="button" class="repeater__remove" aria-label="Remove"
+                style="grid-column: 1 / -1;">× Remove role</button>
+      `;
+      row.querySelectorAll('input, textarea').forEach(i => i.addEventListener('input', markDirty));
+      row.querySelector('.repeater__remove').addEventListener('click', () => {
+        row.remove();
+        markDirty();
+      });
+      root.appendChild(row);
+    }
+
+    function collectExperience() {
+      return $$('#exp-repeater .repeater__row').map(r => ({
+        company: r.querySelector('[data-k="company"]').value.trim(),
+        role: r.querySelector('[data-k="role"]').value.trim(),
+        start: r.querySelector('[data-k="start"]').value.trim(),
+        end: r.querySelector('[data-k="end"]').value.trim(),
+        bullets: r.querySelector('[data-k="bullets"]').value.trim(),
+      })).filter(x => x.company || x.role);
+    }
+
+    // Skills chip input
+    function renderSkills(items) {
+      const box = $('#skills-box');
+      // Remove existing chips
+      $$('.chip', box).forEach(c => c.remove());
+      const input = $('#skills-input');
+      items.forEach(s => addChip(s));
+      // Move input to the end
+      box.appendChild(input);
+    }
+
+    function addChip(text) {
+      const box = $('#skills-box');
+      const input = $('#skills-input');
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML = `<span>${escapeHTML(text)}</span>
+        <button type="button" class="chip__remove" aria-label="Remove">×</button>`;
+      chip.querySelector('.chip__remove').addEventListener('click', () => {
+        chip.remove();
+        markDirty();
+      });
+      box.insertBefore(chip, input);
+    }
+
+    function collectSkills() {
+      return $$('#skills-box .chip > span').map(s => s.textContent.trim()).filter(Boolean);
+    }
+
+    $('#skills-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const v = e.target.value.trim();
+        if (v) {
+          addChip(v);
+          e.target.value = '';
+          markDirty();
+        }
+      } else if (e.key === 'Backspace' && e.target.value === '') {
+        // Remove last chip if input is empty
+        const chips = $$('#skills-box .chip');
+        if (chips.length) {
+          chips[chips.length - 1].remove();
+          markDirty();
+        }
+      }
+    });
+
+    // Repeater "add" buttons
+    $$('.repeater__add').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const kind = btn.dataset.add;
+        if (kind === 'links') addLinkRow({ label: '', url: '' });
+        else if (kind === 'experience') addExperienceRow({});
+        markDirty();
+      });
+    });
+
+    // ---------------------------------------------------------------------
+    // 5. Section C: CV upload (drag-drop + picker)
+    // ---------------------------------------------------------------------
+
+    function wireCV() {
+      const zone = $('#cv-zone');
+      const file = $('#cv-file');
+      zone.addEventListener('click', () => file.click());
+      zone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); }
+      });
+      ['dragenter', 'dragover'].forEach(ev => {
+        zone.addEventListener(ev, (e) => {
+          e.preventDefault(); e.stopPropagation();
+          zone.classList.add('is-drag');
+        });
+      });
+      ['dragleave', 'drop'].forEach(ev => {
+        zone.addEventListener(ev, (e) => {
+          e.preventDefault(); e.stopPropagation();
+          zone.classList.remove('is-drag');
+        });
+      });
+      zone.addEventListener('drop', (e) => {
+        const f = e.dataTransfer.files[0];
+        if (f) doUpload(f);
+      });
+      file.addEventListener('change', () => {
+        if (file.files[0]) doUpload(file.files[0]);
+        file.value = '';
+      });
+      $('#cv-replace').addEventListener('click', () => file.click());
+      $('#cv-delete').addEventListener('click', doDeleteCV);
+    }
+
+    async function doUpload(f) {
+      // Client-side validation mirror — server is authoritative.
+      const ext = (f.name.split('.').pop() || '').toLowerCase();
+      if (!['pdf', 'docx'].includes(ext)) {
+        showToast('Only PDF or DOCX allowed', true);
+        return;
+      }
+      if (f.size > 5 * 1024 * 1024) {
+        showToast('File is over 5 MB', true);
+        return;
+      }
+      const fd = new FormData();
+      fd.append('file', f);
+      try {
+        showToast('Uploading…');
+        await fetchJSON('/api/profile/cv', { method: 'POST', body: fd });
+        showToast('CV uploaded');
+        await refreshCv();
+      } catch (e) {
+        showToast('Upload failed: ' + e.message, true);
+      }
+    }
+
+    async function doDeleteCV() {
+      if (!confirm('Delete your CV? This cannot be undone.')) return;
+      try {
+        await fetchJSON('/api/profile/cv', { method: 'DELETE' });
+        showToast('CV deleted');
+        await refreshCv();
+      } catch (e) {
+        showToast('Delete failed: ' + e.message, true);
+      }
+    }
+
+    // GET /api/profile/cv serves the FILE. Metadata comes from /meta, so a
+    // successful GET of this one means a real CV is on disk.
+    async function refreshCv() {
+      try {
+        const meta = await fetchJSON('/api/profile/cv/meta');
+        state.cv = meta;
+        if (meta && meta.has_cv) {
+          $('#cv-current-wrap').hidden = false;
+          $('#cv-zone').style.display = 'none';
+          const ext = (meta.filename || 'cv.pdf').split('.').pop().toUpperCase() || 'PDF';
+          $('#cv-icon').textContent = ext.slice(0, 4);
+          $('#cv-name').textContent = meta.filename || 'cv';
+          const ts = meta.uploaded_at ? new Date(meta.uploaded_at).toLocaleString() : '';
+          $('#cv-meta').textContent =
+            (meta.size ? fmtSize(meta.size) + ' · ' : '') + (ts ? 'Uploaded ' + ts : '');
+        } else {
+          $('#cv-current-wrap').hidden = true;
+          $('#cv-zone').style.display = '';
+        }
+      } catch (e) {
+        $('#cv-current-wrap').hidden = true;
+        $('#cv-zone').style.display = '';
+      }
+    }
+
+    function fmtSize(bytes) {
+      const b = Number(bytes) || 0;
+      if (b < 1024) return b + ' B';
+      if (b < 1024 * 1024) return (b / 1024).toFixed(0) + ' KB';
+      return (b / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    // ---------------------------------------------------------------------
+    // 6. Section D: Connectors — child modal + 2s polling
+    // ---------------------------------------------------------------------
+
+    const CONNECTOR_META = {
+      linkedin: { name: 'LinkedIn', color: '#0A66C2', icon: 'in' },
+      xing:     { name: 'XING',     color: '#006567', icon: 'X' },
+      indeed:   { name: 'Indeed',   color: '#2164F4', icon: 'i' },
+      workday:  { name: 'Workday',  color: '#F38B00', icon: 'W' },
+    };
+
+    function renderConnectors(payload) {
+      const grid = $('#connectors-grid');
+      grid.innerHTML = '';
+      state.connectors = (payload && payload.connectors) || [];
+      state.connectors.forEach(c => grid.appendChild(buildConnectorCard(c)));
+    }
+
+    function buildConnectorCard(c) {
+      const meta = CONNECTOR_META[c.platform] || { name: c.platform, color: '#475569', icon: '?' };
+      const card = document.createElement('div');
+      card.className = 'connector';
+      card.dataset.platform = c.platform;
+      const connected = c.status === 'connected';
+      card.innerHTML = `
+        <div class="connector__head">
+          <div class="connector__logo" style="background: ${escapeHTML(meta.color)};">
+            ${escapeHTML(meta.icon)}
+          </div>
+          <div class="connector__name">${escapeHTML(meta.name)}</div>
+          <span class="connector__status connector__status--${c.status}"
+                data-role="status">${escapeHTML(c.status)}</span>
+        </div>
+        <div class="connector__action">
+          <button type="button" class="btn btn--sm" data-role="toggle">
+            ${connected ? 'Disconnect' : 'Connect'}
+          </button>
+        </div>
+      `;
+      card.querySelector('[data-role="toggle"]').addEventListener('click', async () => {
+        if (connected) {
+          if (!confirm('Disconnect ' + meta.name + '? The stored session cookies are deleted.')) return;
+          try {
+            await fetchJSON('/api/connectors/' + c.platform, { method: 'DELETE' });
+            showToast(meta.name + ' disconnected');
+            renderConnectors(await fetchJSON('/api/connectors'));
+          } catch (e) {
+            showToast('Disconnect failed: ' + e.message, true);
+          }
+        } else {
+          openCaptureModal(c.platform, meta);
+        }
+      });
+      return card;
+    }
+
+    function openCaptureModal(platform, meta) {
+      const modal = $('#capture-modal');
+      $('#capture-modal-title').textContent = 'Connect ' + meta.name;
+      $('#capture-modal-body').textContent =
+        "We're opening a browser to capture your " + meta.name + " cookies. " +
+        'Sign in normally, then close the browser window — we\'ll detect the ' +
+        'cookies and finish setup.';
+      modal.hidden = false;
+
+      const continueBtn = $('#capture-continue');
+      const cancelBtn = $('#capture-cancel');
+      const cleanup = () => {
+        modal.hidden = true;
+        continueBtn.onclick = null;
+        cancelBtn.onclick = null;
+      };
+      cancelBtn.onclick = cleanup;
+      continueBtn.onclick = async () => {
+        cleanup();
+        await startConnector(platform);
+      };
+    }
+
+    async function startConnector(platform) {
+      // Flip the card to "connecting" immediately for responsiveness.
+      setConnectorStatus(platform, 'connecting');
+      try {
+        const res = await fetchJSON('/api/connectors/' + platform + '/connect',
+                                    { method: 'POST' });
+        if (res && res.ok) {
+          // Poll while the browser capture is in progress; the server flips
+          // the connector to "connected" only once real cookies land in the
+          // encrypted vault.
+          pollConnector(platform);
+        } else {
+          showToast('Could not start connector', true);
+        }
+      } catch (e) {
+        showToast('Connector start failed: ' + e.message, true);
+        setConnectorStatus(platform, 'disconnected');
+      }
+    }
+
+    function setConnectorStatus(platform, status) {
+      const card = document.querySelector('.connector[data-platform="' + platform + '"]');
+      if (!card) return;
+      const badge = card.querySelector('[data-role="status"]');
+      badge.className = 'connector__status connector__status--' + status;
+      badge.textContent = status;
+    }
+
+    function pollConnector(platform) {
+      // Stop any existing poll for this platform
+      const existing = state._pollHandles.get(platform);
+      if (existing) clearInterval(existing);
+
+      // Bounded: a capture that never completes must not poll forever.
+      let attempts = 0;
+      const MAX_TICKS = 150; // 150 × 2s = 5 minutes
+
+      const tick = async () => {
+        if (++attempts > MAX_TICKS) {
+          const h = state._pollHandles.get(platform);
+          if (h) clearInterval(h);
+          state._pollHandles.delete(platform);
+          setConnectorStatus(platform, 'disconnected');
+          showToast('Capture timed out — try again', true);
+          return;
+        }
+        try {
+          const payload = await fetchJSON('/api/connectors');
+          const c = (payload.connectors || []).find(x => x.platform === platform);
+          if (!c) return;
+          if (c.status === 'connected') {
+            const card = document.querySelector('.connector[data-platform="' + platform + '"]');
+            if (card) {
+              const badge = card.querySelector('[data-role="status"]');
+              badge.className = 'connector__status connector__status--connected';
+              badge.textContent = 'connected';
+              const btn = card.querySelector('[data-role="toggle"]');
+              btn.textContent = 'Disconnect';
+            }
+            showToast(platform + ' connected');
+            const h = state._pollHandles.get(platform);
+            if (h) clearInterval(h);
+            state._pollHandles.delete(platform);
+          } else if (c.status === 'disconnected' && attempts > 2) {
+            // The capture process died without storing anything.
+            const h = state._pollHandles.get(platform);
+            if (h) clearInterval(h);
+            state._pollHandles.delete(platform);
+            setConnectorStatus(platform, 'disconnected');
+            showToast('No cookies captured — try again', true);
+          }
+        } catch (e) {
+          // network blip — keep polling until MAX_TICKS
+        }
+      };
+      // Fire once now, then every 2s
+      tick();
+      const h = setInterval(tick, 2000);
+      state._pollHandles.set(platform, h);
+    }
+
+    // ---------------------------------------------------------------------
+    // 7. Save: PUT /api/profile
+    // ---------------------------------------------------------------------
+
+    async function doSave() {
+      const btn = $('#save-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      const payload = {
+        name: $('#name').value.trim(),
+        phone: $('#phone').value.trim(),
+        location: $('#location').value.trim(),
+        headline: $('#headline').value.trim(),
+        summary: $('#summary').value.trim(),
+        links: collectLinks(),
+        experience: collectExperience(),
+        skills: collectSkills(),
+      };
+      try {
+        await fetchJSON('/api/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        btn.textContent = 'Save';
+        showToast('Saved');
+        // Go back to the dashboard after a brief beat so the toast is visible
+        setTimeout(() => { window.location.href = '/app/'; }, 700);
+      } catch (e) {
+        showToast('Save failed: ' + e.message, true);
+        btn.disabled = false;
+        btn.textContent = 'Save';
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // Wire-up
+    // ---------------------------------------------------------------------
+
+    document.addEventListener('DOMContentLoaded', () => {
+      wireCV();
+      $('#save-btn').addEventListener('click', doSave);
+      boot();
+    });
+  })();
+  </script>
+</body>
+</html>

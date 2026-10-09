@@ -20,6 +20,9 @@ Schema invariants:
 """
 from __future__ import annotations
 
+import json
+import logging
+import os
 import re
 import secrets
 import sqlite3
@@ -28,6 +31,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
+
+log = logging.getLogger("db.users_db")
 
 # Project root = parent of src/
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -97,12 +102,69 @@ CREATE TABLE IF NOT EXISTS users (
     reset_token TEXT,
     reset_expires_at TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    -- Phase 2.6 — profile page (CV, experience, links)
+    phone TEXT,
+    location TEXT,
+    headline TEXT,
+    summary TEXT,
+    experience_json TEXT,
+    skills_json TEXT,
+    links_json TEXT,
+    cv_upload_path TEXT,
+    cv_uploaded_at TEXT,
+    onboarding_complete INTEGER DEFAULT 0,
+    onboarding_step INTEGER DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token);
 """
+
+# Gated ALTER TABLE migrations for DBs created before Phase 2.6.
+#
+# SQLite has no "ADD COLUMN IF NOT EXISTS" and each ALTER on an existing
+# column raises, so every column is guarded by a PRAGMA table_info probe.
+# Same shape as connect_user_db()'s gate migrations in src/db/jobs_db.py —
+# an old users.db upgrades in place with no data loss.
+_PROFILE_MIGRATIONS = (
+    ("phone", "ALTER TABLE users ADD COLUMN phone TEXT"),
+    ("location", "ALTER TABLE users ADD COLUMN location TEXT"),
+    ("headline", "ALTER TABLE users ADD COLUMN headline TEXT"),
+    ("summary", "ALTER TABLE users ADD COLUMN summary TEXT"),
+    ("experience_json", "ALTER TABLE users ADD COLUMN experience_json TEXT"),
+    ("skills_json", "ALTER TABLE users ADD COLUMN skills_json TEXT"),
+    ("links_json", "ALTER TABLE users ADD COLUMN links_json TEXT"),
+    ("cv_upload_path", "ALTER TABLE users ADD COLUMN cv_upload_path TEXT"),
+    ("cv_uploaded_at", "ALTER TABLE users ADD COLUMN cv_uploaded_at TEXT"),
+    ("onboarding_complete",
+     "ALTER TABLE users ADD COLUMN onboarding_complete INTEGER DEFAULT 0"),
+    ("onboarding_step",
+     "ALTER TABLE users ADD COLUMN onboarding_step INTEGER DEFAULT 0"),
+)
+
+#: Scalar columns the profile page reads and writes (never password_hash /
+#: email — those are owned by the auth flow, not the profile form).
+PROFILE_COLUMNS = (
+    "name", "phone", "location", "headline", "summary",
+)
+
+#: JSON-encoded list columns. The API exposes them decoded (``links``,
+#: ``experience``, ``skills``); the DB stores them as TEXT so the schema stays
+#: flat and needs no separate profile table.
+_JSON_COLUMNS = {
+    "links_json": "links",
+    "experience_json": "experience",
+    "skills_json": "skills",
+}
+
+#: Link kinds the profile page offers in its repeater.
+LINK_KINDS = ("linkedin", "github", "portfolio", "other")
+
+#: CV file types the uploader accepts. Extension-gated only — the ATS
+#: adapters never parse the CV, they just hand the path to a browser upload.
+CV_ALLOWED_EXTS = ("pdf", "docx")
+CV_MAX_BYTES = 5 * 1024 * 1024
 
 
 # -------------------------------------------------------------------
@@ -383,3 +445,345 @@ def user_to_dict(row: sqlite3.Row) -> dict[str, Any]:
 def ensure_schema() -> None:
     """Public alias — called once at app startup."""
     init_users_db()
+
+
+# -------------------------------------------------------------------
+# -------------------------------------------------------------------
+# Phase 2.6 — Profile page helpers
+# -------------------------------------------------------------------
+#
+# The profile page (web/static/profile.html, served at /app/profile) reads
+# and writes exactly the columns declared in SCHEMA / _PROFILE_MIGRATIONS.
+# Column names are the card's contract and are asserted by
+# tests/test_profile_page.py:
+#
+#   scalar : name, phone, location, headline, summary
+#   json   : links_json, experience_json, skills_json   -> links/experience/skills
+#   cv     : cv_upload_path, cv_uploaded_at
+#   tour   : onboarding_complete, onboarding_step
+#
+# The bootstrap admin ("lars") is NOT a users-table citizen — it is
+# authenticated by check_bootstrap_admin() and its identity lives in env
+# vars. Every writer here refuses to touch it, so the self-host operator
+# cannot be downgraded or renamed through the profile form.
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    """Add any Phase 2.6 column this DB file is missing.
+
+    SQLite has no "ADD COLUMN IF NOT EXISTS", so each ALTER is guarded by a
+    PRAGMA probe first. Idempotent and cheap — safe on every connect, and a
+    pre-2.6 users.db upgrades in place without losing rows.
+    """
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    for col, ddl in _PROFILE_MIGRATIONS:
+        if col in existing:
+            continue
+        try:
+            conn.execute(ddl)
+        except sqlite3.OperationalError:
+            # A concurrent writer won the race and added it first — that is
+            # the outcome we wanted anyway. Anything else is a real problem
+            # and will surface on the next statement that touches the column.
+            log.warning("users_db migration %s failed", col)
+
+
+def _decode_list(raw: Any, kind: str) -> list[Any]:
+    """Decode a JSON list column, tolerating null / corrupt / wrong-shape."""
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    return value if isinstance(value, list) else []
+
+
+def _profile_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    """Project a users Row to the profile API shape (no secrets)."""
+    keys = row.keys()
+    return {
+        "id": row["id"],
+        "user_id": row["id"],
+        "name": row["name"] or "",
+        "email": row["email"] or "",
+        "phone": (row["phone"] if "phone" in keys else "") or "",
+        "location": (row["location"] if "location" in keys else "") or "",
+        "headline": (row["headline"] if "headline" in keys else "") or "",
+        "summary": (row["summary"] if "summary" in keys else "") or "",
+        "links": _decode_list(row["links_json"] if "links_json" in keys else None, "links"),
+        "experience": _decode_list(
+            row["experience_json"] if "experience_json" in keys else None, "experience"
+        ),
+        "skills": _decode_list(row["skills_json"] if "skills_json" in keys else None, "skills"),
+        "plan": row["plan"] or "free",
+        "cv_upload_path": (row["cv_upload_path"] if "cv_upload_path" in keys else "") or "",
+        "cv_uploaded_at": (row["cv_uploaded_at"] if "cv_uploaded_at" in keys else "") or "",
+        "onboarding_complete": int(
+            (row["onboarding_complete"] if "onboarding_complete" in keys else 0) or 0
+        ),
+        "onboarding_step": int(
+            (row["onboarding_step"] if "onboarding_step" in keys else 0) or 0
+        ),
+        "is_admin": row["id"] == ADMIN_USER_ID,
+    }
+
+
+def _admin_profile() -> dict[str, Any]:
+    """Read-only profile for the bootstrap admin, derived from env.
+
+    Deliberately NOT backed by a users-table row: writing admin's CV or
+    personal data through the profile form would shadow the env-driven
+    identity that check_bootstrap_admin() and /api/me already use.
+    """
+    return {
+        "id": ADMIN_USER_ID,
+        "user_id": ADMIN_USER_ID,
+        "name": os.getenv("LARS_NAME", "Lars Zimmermann"),
+        "email": os.getenv("LARS_EMAIL", "lars.z@icloud.com"),
+        "phone": "",
+        "location": "",
+        "headline": "",
+        "summary": "",
+        "links": [],
+        "experience": [],
+        "skills": [],
+        "plan": "admin (self-host)",
+        "cv_upload_path": "",
+        "cv_uploaded_at": "",
+        "onboarding_complete": 1,
+        "onboarding_step": 0,
+        "is_admin": True,
+    }
+
+
+def get_profile(uid: str) -> dict[str, Any]:
+    """Return the profile dict for a user. Never raises for a missing row —
+    an unknown or admin user gets the empty/read-only shape instead."""
+    if uid == ADMIN_USER_ID:
+        return _admin_profile()
+    conn = connect_users_db()
+    try:
+        _apply_migrations(conn)
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    if row is None:
+        return {}
+    return _profile_row_to_dict(row)
+
+
+def normalise_links(links: Any) -> list[dict[str, str]]:
+    """Coerce the links repeater into [{kind, url}] with known kinds only.
+
+    Anything without a usable http(s) URL is dropped — a link row with an
+    empty target would render as a dead anchor on the profile page.
+    """
+    out: list[dict[str, str]] = []
+    if not isinstance(links, list):
+        return out
+    for item in links:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "other").strip().lower()
+        if kind not in LINK_KINDS:
+            kind = "other"
+        url = str(item.get("url") or "").strip()
+        if not url.lower().startswith(("http://", "https://")):
+            continue
+        out.append({"kind": kind, "url": url})
+    return out
+
+
+def normalise_experience(items: Any) -> list[dict[str, Any]]:
+    """Coerce the experience repeater into [{company, role, start, end, bullets}].
+
+    Entries missing both company and role are dropped — an empty row in the
+    repeater should not become an empty timeline entry.
+    """
+    out: list[dict[str, Any]] = []
+    if not isinstance(items, list):
+        return out
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        company = str(item.get("company") or "").strip()
+        role = str(item.get("role") or "").strip()
+        if not company and not role:
+            continue
+        bullets_raw = item.get("bullets") or []
+        if isinstance(bullets_raw, str):
+            # The textarea writes one bullet per line.
+            bullets = [ln.strip() for ln in bullets_raw.splitlines() if ln.strip()]
+        elif isinstance(bullets_raw, list):
+            bullets = [str(b).strip() for b in bullets_raw if str(b).strip()]
+        else:
+            bullets = []
+        out.append({
+            "company": company,
+            "role": role,
+            "start": str(item.get("start") or "").strip(),
+            "end": str(item.get("end") or "").strip(),
+            "bullets": bullets,
+        })
+    return out
+
+
+def normalise_skills(skills: Any) -> list[str]:
+    """Coerce the chip input into a de-duplicated list of non-empty strings."""
+    if not isinstance(skills, list):
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for s in skills:
+        val = str(s).strip()
+        if not val:
+            continue
+        key = val.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(val)
+    return out
+
+
+def set_profile(uid: str, fields: dict[str, Any]) -> bool:
+    """Write profile fields. Returns True if a row was written.
+
+    Only whitelisted keys are considered; ``email``, ``password_hash``,
+    ``plan`` and ``verified`` are NOT writable through this path.
+    """
+    if uid == ADMIN_USER_ID:
+        return False
+    assignments: list[str] = []
+    values: list[Any] = []
+    for col in PROFILE_COLUMNS:
+        if col in fields:
+            raw = fields[col]
+            assignments.append(f"{col} = ?")
+            values.append("" if raw is None else str(raw).strip()[:4000])
+
+    for json_col, api_key in _JSON_COLUMNS.items():
+        if api_key not in fields:
+            continue
+        raw = fields[api_key]
+        if api_key == "links":
+            normalised = normalise_links(raw)
+        elif api_key == "experience":
+            normalised = normalise_experience(raw)
+        else:
+            normalised = normalise_skills(raw)
+        assignments.append(f"{json_col} = ?")
+        values.append(json.dumps(normalised, ensure_ascii=False))
+
+    if not assignments:
+        return False
+
+    assignments.append("updated_at = ?")
+    values.append(_now_iso())
+    values.append(uid)
+
+    conn = connect_users_db()
+    try:
+        _apply_migrations(conn)
+        cur = conn.execute(
+            f"UPDATE users SET {', '.join(assignments)} WHERE id = ?", values
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def set_cv_upload(uid: str, relative_path: str) -> Optional[str]:
+    """Record a stored CV. Returns the ISO timestamp, or None if no row.
+
+    ``relative_path`` is project-root-relative (``data/users/<id>/cv/cv.pdf``)
+    so a DB restored into a container still resolves. Callers must have
+    already resolved it to a real, non-traversing path on disk.
+    """
+    if uid == ADMIN_USER_ID:
+        return None
+    ts = _now_iso()
+    conn = connect_users_db()
+    try:
+        _apply_migrations(conn)
+        cur = conn.execute(
+            """UPDATE users
+               SET cv_upload_path = ?, cv_uploaded_at = ?, updated_at = ?
+               WHERE id = ?""",
+            (relative_path, ts, ts, uid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return ts if cur.rowcount > 0 else None
+
+
+def clear_cv_upload(uid: str) -> None:
+    """Forget the CV pointer. Does not touch the file — the caller owns that."""
+    if uid == ADMIN_USER_ID:
+        return
+    conn = connect_users_db()
+    try:
+        _apply_migrations(conn)
+        conn.execute(
+            """UPDATE users
+               SET cv_upload_path = NULL, cv_uploaded_at = NULL, updated_at = ?
+               WHERE id = ?""",
+            (_now_iso(), uid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_onboarding(uid: str, complete: bool, step: Optional[int] = None) -> bool:
+    """Persist guided-tour state. Returns True if a row was written.
+
+    Step is clamped to TOUR_TOTAL_STEPS so a crafted request cannot park the
+    tour on a step that does not exist.
+    """
+    if uid == ADMIN_USER_ID:
+        return False
+    conn = connect_users_db()
+    try:
+        _apply_migrations(conn)
+        cur = conn.execute(
+            "UPDATE users SET onboarding_complete = ?, onboarding_step = ?, "
+            "updated_at = ? WHERE id = ?",
+            (1 if complete else 0, clamp_tour_step(step), _now_iso(), uid),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+#: Number of steps in the first-run dashboard tour. Kept next to the DB
+#: writer because onboarding_step is clamped against it.
+TOUR_TOTAL_STEPS = 5
+
+
+def clamp_tour_step(step: Optional[int]) -> int:
+    """Clamp a client-supplied tour step into 0..TOUR_TOTAL_STEPS."""
+    if step is None:
+        return 0
+    try:
+        value = int(step)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(TOUR_TOTAL_STEPS, value))
+
+
+def tour_pending(uid: str) -> bool:
+    """True when the first-run tour should fire for this user.
+
+    The admin is never toured (their profile has no DB row to persist state
+    in), so they read as already onboarded.
+    """
+    profile = get_profile(uid)
+    if not profile or profile.get("is_admin"):
+        return False
+    return not bool(profile.get("onboarding_complete"))

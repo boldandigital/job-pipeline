@@ -247,6 +247,222 @@
     </article>
   </template>
 
+  <!-- ===========================================
+       PHASE 2.6 — Guided tour overlay
+       Fires on first visit only (gated by
+       /api/profile → onboarding_complete). Drawn as
+       a single high-z fixed layer; all 5 steps share
+       the same DOM. Dismissed via Skip or Done.
+       Styles live in index.css (#tour-overlay …) so
+       the dashboard's class-coverage static test
+       keeps passing.
+       =========================================== -->
+  <div id="tour-overlay" hidden aria-hidden="true">
+    <div id="tour-backdrop"></div>
+    <div id="tour-highlight" hidden></div>
+    <div id="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-title">
+      <div id="tour-step">Step 1 of 5</div>
+      <h2 id="tour-title">Welcome aboard</h2>
+      <p id="tour-body">A quick tour of the Bridge.</p>
+      <div id="tour-actions">
+        <button type="button" class="tour-btn tour-btn--ghost" id="tour-skip">Skip tour</button>
+        <button type="button" class="tour-btn tour-btn--primary" id="tour-next">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /* ============================================================
+     Phase 2.6 — Guided tour.
+     Own script block (does not touch the dashboard renderer).
+     Steps: 5, all 5 must run through (or Skip) before the
+     onboarding flag is set on the server.
+     ============================================================ */
+  (function () {
+    'use strict';
+
+    // The 5 steps the card specifies, in order. `target` is the element the
+// spotlight frames — null centres the card (used by step 1).
+const STEPS = [
+      {
+        title: 'Welcome aboard ⚓',
+        body: "This is your Job Bridge — every assignment lands here.",
+        target: '#jobs-grid',
+      },
+      {
+        title: 'Three gates, then submit',
+        body: 'Each card has 3 gates: CV, Anschreiben, Motivation. Mark them in order, then Approve & Submit.',
+        target: '.card:first-child .gates',
+      },
+      {
+        title: 'Fill in your profile',
+        body: 'Click Profile to fill in your personal data and upload your CV.',
+        target: '#link-profile',
+      },
+      {
+        title: 'Connect your accounts',
+        body: 'Add LinkedIn cookies in Settings → Connectors so the auto-apply can reach your account.',
+        target: '#link-settings',
+      },
+      {
+        title: 'Ready to send',
+        body: "When you're ready, click Apply Channel to see only the cards with all 3 gates ✓.",
+        target: 'a[data-filter="ready"]',
+      },
+    ];
+
+    function $(sel) { return document.querySelector(sel); }
+
+    function showOverlay() {
+      $('#tour-overlay').hidden = false;
+      $('#tour-overlay').setAttribute('aria-hidden', 'false');
+      document.body.classList.add('tour-active');
+    }
+    function hideOverlay() {
+      $('#tour-overlay').hidden = true;
+      $('#tour-overlay').setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('tour-active');
+    }
+
+    async function postComplete() {
+      try {
+        // Send the final step explicitly: POSTing without `step` writes the
+        // default 0, which would wipe the progress the tour just recorded.
+        await fetch('/api/profile/onboarding', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ complete: true, step: STEPS.length }),
+        });
+      } catch (e) {
+        // Fire-and-forget. If it fails, the user just gets the tour
+        // again on next visit — annoying but not destructive.
+        console.warn('onboarding complete POST failed:', e);
+      }
+    }
+
+    function positionHighlight(el) {
+      const hl = $('#tour-highlight');
+      if (!el) {
+        hl.hidden = true;
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      const pad = 6;
+      hl.style.left = (rect.left - pad) + 'px';
+      hl.style.top = (rect.top - pad) + 'px';
+      hl.style.width = (rect.width + pad * 2) + 'px';
+      hl.style.height = (rect.height + pad * 2) + 'px';
+      hl.hidden = false;
+    }
+
+    function renderStep(idx) {
+      activeStepIdx = idx;
+      const step = STEPS[idx];
+      $('#tour-step').textContent = 'Step ' + (idx + 1) + ' of ' + STEPS.length;
+      $('#tour-title').textContent = step.title;
+      $('#tour-body').textContent = step.body;
+      const isLast = idx === STEPS.length - 1;
+      $('#tour-next').textContent = isLast ? 'Done' : 'Next';
+      positionHighlight(step.target ? $(step.target) : null);
+    }
+
+    // Persist progress so a reload mid-tour resumes rather than restarts.
+    async function postStep(step) {
+      try {
+        await fetch('/api/profile/onboarding', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ complete: false, step: step }),
+        });
+      } catch (e) { /* fire-and-forget */ }
+    }
+
+    async function start() {
+      // Gate 1: profile says not yet onboarded
+      let prof = null;
+      try {
+        const r = await fetch('/api/profile', { credentials: 'same-origin' });
+        if (r.ok) prof = await r.json();
+      } catch (e) { /* network failure → don't fire tour */ return; }
+      if (!prof) return;
+      if (prof.onboarding_complete) return; // already done, stay quiet
+      // Gate 2: admin is always treated as onboarded (server enforces
+      // is_admin, but a defensive early-out is cheap)
+      if (prof.is_admin) {
+        try {
+          await fetch('/api/profile/onboarding', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ complete: true }),
+          });
+        } catch (e) {}
+        return;
+      }
+
+      let idx = 0;
+      showOverlay();
+      renderStep(idx);
+
+      const onNext = async () => {
+        idx += 1;
+        if (idx >= STEPS.length) {
+          // Finished naturally (clicked Done on the last step)
+          hideOverlay();
+          await postComplete();
+          cleanup();
+          return;
+        }
+        renderStep(idx);
+        postStep(idx);
+      };
+      const onSkip = async () => {
+        hideOverlay();
+        await postComplete();
+        cleanup();
+      };
+      function cleanup() {
+        $('#tour-next').removeEventListener('click', onNext);
+        $('#tour-skip').removeEventListener('click', onSkip);
+        window.removeEventListener('keydown', onKey);
+      }
+      function onKey(e) {
+        if (e.key === 'Escape') onSkip();
+        else if (e.key === 'ArrowRight' || e.key === 'Enter') onNext();
+      }
+      $('#tour-next').addEventListener('click', onNext);
+      $('#tour-skip').addEventListener('click', onSkip);
+      window.addEventListener('keydown', onKey);
+    }
+
+    // Re-position the spotlight on resize/scroll so it keeps framing its
+    // target. Also re-run when cards finish rendering, since step 2 targets a
+    // card that does not exist until /api/jobs resolves.
+    let activeStepIdx = 0;
+    function refreshHighlight() {
+      const hl = $('#tour-highlight');
+      if (!hl || hl.hidden || $('#tour-overlay').hidden) return;
+      const step = STEPS[activeStepIdx];
+      positionHighlight(step && step.target ? $(step.target) : null);
+    }
+    window.addEventListener('resize', refreshHighlight);
+    window.addEventListener('scroll', refreshHighlight, true);
+    // The dashboard renderer replaces #jobs-grid's children after load.
+    const jobsGrid = $('#jobs-grid');
+    if (jobsGrid && window.MutationObserver) {
+      new MutationObserver(refreshHighlight).observe(jobsGrid, { childList: true });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', start);
+    } else {
+      start();
+    }
+  })();
+  </script>
+
   <script>
   (async function () {
     'use strict';
@@ -792,6 +1008,30 @@
         const j = await fetchJSON('/api/jobs');
         totalJobs = (j && j.length) || 0;
       } catch (e) {}
+      // Live connector status — the vault is the source of truth, so this
+      // reflects whether cookies are actually stored.
+      let connectors = [];
+      try {
+        const c = await fetchJSON('/api/connectors');
+        connectors = (c && c.connectors) || [];
+      } catch (e) { /* fall back to the static copy below */ }
+      const CONNECTOR_NAMES = { linkedin: 'LinkedIn', xing: 'XING', indeed: 'Indeed', workday: 'Workday' };
+      const connectorRows = connectors.length
+        ? connectors.map(c => {
+            const label = CONNECTOR_NAMES[c.platform] || c.platform;
+            const badge = c.status === 'connected'
+              ? '<span style="color:#10B981;font-weight:600">✓ Connected</span>'
+              : c.status === 'connecting'
+                ? '<span style="color:#F59E0B;font-weight:600">⟳ Connecting…</span>'
+                : '<span style="color:#94A3B8">Not connected</span>';
+            const action = c.status === 'connected'
+              ? '<button class="btn btn--sm" data-disconnect="' + escapeHTML(c.platform) + '">Disconnect</button>'
+              : '<button class="btn btn--sm" data-connect="' + escapeHTML(c.platform) + '">Connect</button>';
+            return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #F1F5F9">' +
+              '<span style="flex:1"><strong>' + escapeHTML(label) + '</strong><br><span style="font-size:12px">' + badge + '</span></span>' +
+              action + '</div>';
+          }).join('')
+        : '<p class="modal__p">Connector status unavailable while signed out.</p>';
       const html = `
         <h2 class="modal__title">⚙ Settings</h2>
         <p class="modal__sub">CaptainApply v3 · self-host tier</p>
@@ -803,20 +1043,81 @@
           <dt>Restart policy</dt><dd>launchd KeepAlive (respawns on any exit)</dd>
         </dl>
         <h3 class="modal__h3">Connectors</h3>
+        <p class="modal__p">LinkedIn and XING are used by the auto-apply. Connect opens a
+          browser where you sign in; we capture the session cookies and store them
+          encrypted on this machine. You stay in control — Disconnect deletes them.</p>
+        <div id="modal-connectors">${connectorRows}</div>
         <p class="modal__p">Apply channels wired: <strong>Greenhouse</strong>, <strong>Lever</strong>, <strong>Ashby</strong>
-          (auto-submit via their public APIs), plus <strong>XING</strong>, <strong>LinkedIn</strong>,
-          <strong>Indeed</strong>, <strong>Workday</strong> via Playwright + stored cookies.</p>
-        <p class="modal__p">Add cookies: <code>bin/captainauth.py set &lt;user&gt; &lt;platform&gt; &lt;file&gt;</code></p>
+          (auto-submit via their public APIs, no login needed).</p>
         <h3 class="modal__h3">Daily cycle</h3>
         <p class="modal__p">Run once: <code>bin/captain.sh once</code> &nbsp;·&nbsp; install cron:
           <code>bin/captain-install.sh</code></p>
       `;
       openModal(html);
+      wireConnectorButtons();
     }
 
+    // Wire the Connect / Disconnect buttons inside the Settings modal.
+    function wireConnectorButtons() {
+      const box = document.getElementById('modal-connectors');
+      if (!box) return;
+      box.addEventListener('click', async (e) => {
+        const connectBtn = e.target.closest('[data-connect]');
+        const disconnectBtn = e.target.closest('[data-disconnect]');
+        if (connectBtn) {
+          const plat = connectBtn.getAttribute('data-connect');
+          connectBtn.disabled = true;
+          connectBtn.textContent = 'Opening browser…';
+          try {
+            await postJSON(`/api/connectors/${encodeURIComponent(plat)}/connect`);
+            flashLog('connector ' + plat + ' — sign in to the browser window that just opened.');
+            pollConnectorStatus(plat);
+          } catch (err) {
+            flashLog('connect failed: ' + err.message);
+            connectBtn.disabled = false;
+            connectBtn.textContent = 'Connect';
+          }
+        } else if (disconnectBtn) {
+          const plat = disconnectBtn.getAttribute('data-disconnect');
+          disconnectBtn.disabled = true;
+          try {
+            await fetchJSON(`/api/connectors/${encodeURIComponent(plat)}`, { method: 'DELETE' });
+            flashLog('connector ' + plat + ' disconnected.');
+            openSettings();
+          } catch (err) {
+            flashLog('disconnect failed: ' + err.message);
+            disconnectBtn.disabled = false;
+          }
+        }
+      });
+    }
+
+    // While a capture runs, refresh the modal until the status flips.
+    function pollConnectorStatus(platform) {
+      let ticks = 0;
+      const timer = setInterval(async () => {
+        if (++ticks > 150) { clearInterval(timer); return; }  // 5 minutes
+        try {
+          const c = await fetchJSON('/api/connectors');
+          const found = (c.connectors || []).find(x => x.platform === platform);
+          if (found && found.status === 'connected') {
+            clearInterval(timer);
+            flashLog('connector ' + platform + ' connected.');
+            openSettings();
+          } else if (found && found.status === 'disconnected' && ticks > 2) {
+            clearInterval(timer);
+            flashLog('no cookies captured — try again.');
+            openSettings();
+          }
+        } catch (e) { /* keep polling */ }
+      }, 2000);
+    }
+
+    // Profile is a full page now (web/static/profile.html, served at /app/profile)
+    // — not a modal. The modal below is kept for Settings only.
     document.getElementById('link-profile').addEventListener('click', (e) => {
       e.preventDefault();
-      openProfile();
+      location.href = '/app/profile';
     });
     document.getElementById('link-settings').addEventListener('click', (e) => {
       e.preventDefault();
