@@ -1219,3 +1219,32 @@ app.include_router(_auth_credentials.router)
 @app.get("/api/health")
 def health():
     return {"ok": True, "ts": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/api/me")
+def api_me(request: Request):
+    """Return the current user — works for HTTP Basic (admin) AND
+    session-cookie (signup users). Used by the dashboard's Profile modal."""
+    uid = current_user_id(request) or "lars"
+    if uid == "lars":
+        # Bootstrap admin — return from env-driven profile, no DB lookup.
+        return {
+            "id": "lars",
+            "user_id": "lars",
+            "name": os.getenv("LARS_NAME", "Lars Zimmermann"),
+            "email": os.getenv("LARS_EMAIL", "lars.z@icloud.com"),
+            "plan": "admin (self-host)",
+            "created_at": "2026-10-04T00:00:00+00:00",
+        }
+    from src.db import users_db as _users_db
+    row = _users_db.get_user_by_id(uid)
+    if row is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    return {
+        "id": row["id"],
+        "user_id": row["id"],
+        "name": row["name"] or row["id"],
+        "email": row["email"],
+        "plan": row["plan"] or "free",
+        "created_at": row["created_at"],
+    }

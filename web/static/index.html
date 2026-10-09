@@ -29,17 +29,17 @@
       <nav class="sidebar__nav">
         <div>
           <div class="nav-section__title">Workspace</div>
-          <a class="nav-item is-active" href="#jobs">
+          <a class="nav-item is-active" href="#jobs" data-filter="all">
             <span class="nav-item__icon">⚓</span>
             Job Bridge
             <span class="nav-item__badge" id="nav-new-count">0</span>
           </a>
-          <a class="nav-item" href="#approved">
+          <a class="nav-item" href="#approved" data-filter="approved">
             <span class="nav-item__icon">★</span>
             Approved
             <span class="nav-item__badge" id="nav-approved-count">0</span>
           </a>
-          <a class="nav-item" href="#skipped">
+          <a class="nav-item" href="#skipped" data-filter="skipped">
             <span class="nav-item__icon">✗</span>
             Skipped
             <span class="nav-item__badge" id="nav-skipped-count">0</span>
@@ -47,26 +47,26 @@
         </div>
         <div>
           <div class="nav-section__title">Pipeline</div>
-          <a class="nav-item" href="#gates">
+          <a class="nav-item" href="#gates" data-filter="gates">
             <span class="nav-item__icon">◐</span>
             Gate Progress
           </a>
-          <a class="nav-item" href="#submit">
+          <a class="nav-item" href="#submit" data-filter="ready">
             <span class="nav-item__icon">↗</span>
             Apply Channel
           </a>
         </div>
         <div>
           <div class="nav-section__title">Account</div>
-          <a class="nav-item" href="#" id="link-profile">
+          <a class="nav-item" href="#" id="link-profile" data-action="profile">
             <span class="nav-item__icon">◉</span>
             Profile
           </a>
-          <a class="nav-item" href="#" id="link-settings">
+          <a class="nav-item" href="#" id="link-settings" data-action="settings">
             <span class="nav-item__icon">⚙</span>
             Settings
           </a>
-          <a class="nav-item" href="#" id="link-logout">
+          <a class="nav-item" href="#" id="link-logout" data-action="logout">
             <span class="nav-item__icon">⏻</span>
             Sign out
           </a>
@@ -300,6 +300,7 @@
     // ============== STATE ==============
     let jobsCache = [];
     const byId = new Map();
+    let activeFilter = 'all';  // all | approved | skipped | gates | ready
 
     // ============== HELPERS ==============
     function fmtScore(score) {
@@ -439,6 +440,7 @@
         byId.set(j.id, j);
       });
       refreshStats();
+      applyFilter();
     }
 
     async function loadJobs() {
@@ -494,7 +496,61 @@
       document.getElementById('nav-new-count').textContent = map.new || 0;
     }
 
+    // ============== FILTER ==============
+    // Sidebar nav: data-filter="all|approved|skipped|gates|ready".
+    // The active filter hides cards that don't match. The cards are
+    // already on screen — no extra fetch. Re-runs after any gate/approve
+    // change so the visible set stays correct.
+    function cardMatchesFilter(j) {
+      switch (activeFilter) {
+        case 'all': return j.status !== 'skipped' && j.status !== 'applied';
+        case 'approved': return j.status === 'approved' || j.status === 'applied';
+        case 'skipped': return j.status === 'skipped';
+        case 'gates': return j.cv_ok || j.anschreiben_ok || j.motivation_ok;
+        case 'ready': return j.cv_ok && j.anschreiben_ok && j.motivation_ok
+                             && j.status !== 'applied';
+        default: return true;
+      }
+    }
+    function applyFilter() {
+      grid.querySelectorAll('.card').forEach(card => {
+        const id = parseInt(card.getAttribute('data-job-id'), 10);
+        const j = byId.get(id);
+        card.style.display = (j && cardMatchesFilter(j)) ? '' : 'none';
+      });
+      // Update eyebrow to show what's visible
+      const visible = Array.from(grid.querySelectorAll('.card'))
+        .filter(c => c.style.display !== 'none').length;
+      const total = grid.querySelectorAll('.card').length;
+      const label = {
+        all: 'all visible',
+        approved: 'approved only',
+        skipped: 'skipped only',
+        gates: 'with any gate ✓',
+        ready: 'ready to submit',
+      }[activeFilter] || 'all';
+      const eyebrow = document.querySelector('.page-header__sub');
+      if (eyebrow) {
+        eyebrow.textContent = visible === total
+          ? `Every assignment opens at gate 01. CV, Anschreiben and Motivation unlock in order, and the submit button stays dark until all three carry your approval.`
+          : `Filter: ${label} (${visible}/${total})`;
+      }
+    }
+    function setFilter(name) {
+      activeFilter = name;
+      document.querySelectorAll('.nav-item[data-filter]').forEach(a => {
+        a.classList.toggle('is-active', a.getAttribute('data-filter') === name);
+      });
+      applyFilter();
+    }
+
     // ============== CLICK HANDLERS ==============
+    document.querySelectorAll('.nav-item[data-filter]').forEach(a => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        setFilter(a.getAttribute('data-filter'));
+      });
+    });
     grid.addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-gate-act],[data-act]');
       if (!btn) return;
@@ -541,6 +597,7 @@
             motivation_ok: result.motivation_ok, status: job ? job.status : 'new',
           });
           refreshStats();
+          applyFilter();
           flashLog(`gate ${stage} ${newVal ? 'approved' : 'rolled back'} — job #${jobId}`);
         } catch (e) {
           // Roll the card back to its pre-click state — never leave a lie on screen.
@@ -554,6 +611,7 @@
             motivation_ok: before.motivation_ok, status: job ? job.status : 'new',
           });
           refreshStats();
+          applyFilter();
           flashLog('gate update failed: ' + e.message);
         }
         return;
@@ -574,6 +632,7 @@
             motivation_ok: !!job.motivation_ok, status: result.status,
           });
           refreshStats();
+          applyFilter();
           flashLog(`job #${jobId} marked ${result.status}`);
           animateToBottom(card);
         } catch (e) {
@@ -597,6 +656,7 @@
             motivation_ok: !!job.motivation_ok, status: result.status,
           });
           refreshStats();
+          applyFilter();
           flashLog(`job #${jobId} skipped`);
           animateToBottom(card);
         } catch (e) {
@@ -655,6 +715,113 @@
 
     // ============== BOOT ==============
     loadJobs();
+
+    // ============== MODAL (Profile / Settings) ==============
+    // A single modal element reused. data-modal="profile" loads
+    // /api/v1/auth/me + the candidate profile. data-modal="settings"
+    // shows env-level knobs (env name, total jobs, secret status).
+    // No design ambitions — readable, dismissable on Esc / backdrop.
+    function openModal(html) {
+      let m = document.getElementById('app-modal');
+      if (!m) {
+        m = document.createElement('div');
+        m.id = 'app-modal';
+        m.className = 'app-modal';
+        m.innerHTML = '<div class="app-modal__backdrop" data-close></div>'
+                    + '<div class="app-modal__panel" role="dialog" aria-modal="true">'
+                    + '<button class="app-modal__close" data-close aria-label="Close">×</button>'
+                    + '<div class="app-modal__body" id="app-modal-body"></div>'
+                    + '</div>';
+        // The CSS gates every rule under [data-version="3-4gate"], so the
+        // modal must be a descendant of that wrapper. Append to .app, not
+        // document.body, or the modal gets default user-agent styles
+        // (display:block, no centering, no backdrop).
+        (document.querySelector('[data-version="3-4gate"]') || document.body).appendChild(m);
+        m.addEventListener('click', (e) => {
+          if (e.target.matches('[data-close]')) closeModal();
+        });
+      }
+      document.getElementById('app-modal-body').innerHTML = html;
+      m.classList.add('is-open');
+    }
+    function closeModal() {
+      const m = document.getElementById('app-modal');
+      if (m) m.classList.remove('is-open');
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+      // ⌘K (or Ctrl-K) focuses the search field — standard pattern.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        document.getElementById('search').focus();
+        document.getElementById('search').select();
+      }
+    });
+
+    async function openProfile() {
+      openModal('<h2 class="modal__title">Profile</h2><p class="modal__sub">Loading…</p>');
+      // /api/me works for both session-cookie users AND HTTP-Basic admin
+      // (the admin "lars" is the bootstrap path — it falls through to the
+      // env-var LARS_USER/LARS_PASS without ever needing /api/v1/auth/me).
+      let me = null;
+      try { me = await fetchJSON('/api/me'); } catch (e) { /* fall through */ }
+      if (!me) {
+        try { me = await fetchJSON('/api/v1/auth/me'); } catch (e) { me = { error: e.message }; }
+      }
+      const name = me && (me.name || me.user_id || me.id) ? (me.name || me.user_id || me.id) : 'lars';
+      const html = `
+        <h2 class="modal__title">⚓ Profile</h2>
+        <p class="modal__sub">Signed in as <strong>${escapeHTML(name)}</strong></p>
+        <dl class="modal__dl">
+          <dt>Display name</dt><dd>${escapeHTML((me && (me.name || me.user_id || me.id)) || 'lars')}</dd>
+          <dt>Email</dt><dd>${escapeHTML((me && me.email) || 'lars.z@icloud.com')}</dd>
+          <dt>Plan</dt><dd>${escapeHTML((me && me.plan) || 'admin (self-host)')}</dd>
+          <dt>Member since</dt><dd>${escapeHTML((me && me.created_at) ? me.created_at.slice(0, 10) : '2026-10-04')}</dd>
+        </dl>
+        <h3 class="modal__h3">CV source</h3>
+        <p class="modal__p">All CVs and cover letters are generated from
+          <code>config/lars-cv-data.json</code>. Edit that file to update your
+          profile — the next <code>bin/captain.sh render</code> picks it up.</p>
+        <p class="modal__path">/Users/lars/Documents/Projects/job-pipeline/config/lars-cv-data.json</p>
+      `;
+      document.getElementById('app-modal-body').innerHTML = html;
+    }
+    async function openSettings() {
+      let totalJobs = '?';
+      try {
+        const j = await fetchJSON('/api/jobs');
+        totalJobs = (j && j.length) || 0;
+      } catch (e) {}
+      const html = `
+        <h2 class="modal__title">⚙ Settings</h2>
+        <p class="modal__sub">CaptainApply v3 · self-host tier</p>
+        <dl class="modal__dl">
+          <dt>Total jobs in queue</dt><dd>${totalJobs}</dd>
+          <dt>Storage</dt><dd>SQLite · <code>data/jobs.db</code></dd>
+          <dt>Daily apply cap</dt><dd>20 / user / day</dd>
+          <dt>Docker image</dt><dd>captainapply/selfhost:20261006-lean · 270 MB</dd>
+          <dt>Restart policy</dt><dd>launchd KeepAlive (respawns on any exit)</dd>
+        </dl>
+        <h3 class="modal__h3">Connectors</h3>
+        <p class="modal__p">Apply channels wired: <strong>Greenhouse</strong>, <strong>Lever</strong>, <strong>Ashby</strong>
+          (auto-submit via their public APIs), plus <strong>XING</strong>, <strong>LinkedIn</strong>,
+          <strong>Indeed</strong>, <strong>Workday</strong> via Playwright + stored cookies.</p>
+        <p class="modal__p">Add cookies: <code>bin/captainauth.py set &lt;user&gt; &lt;platform&gt; &lt;file&gt;</code></p>
+        <h3 class="modal__h3">Daily cycle</h3>
+        <p class="modal__p">Run once: <code>bin/captain.sh once</code> &nbsp;·&nbsp; install cron:
+          <code>bin/captain-install.sh</code></p>
+      `;
+      openModal(html);
+    }
+
+    document.getElementById('link-profile').addEventListener('click', (e) => {
+      e.preventDefault();
+      openProfile();
+    });
+    document.getElementById('link-settings').addEventListener('click', (e) => {
+      e.preventDefault();
+      openSettings();
+    });
   })();
   </script>
 </body>
